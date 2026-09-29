@@ -552,7 +552,17 @@ document.addEventListener("DOMContentLoaded", () => {
     .then(r => r.json())
     .then(stats => {
       const statusText = document.getElementById("statusText");
-      if (statusText) statusText.textContent = `Harness Activo (${stats.status})`;
+      if (statusText) {
+        if (stats.openai_active) {
+          statusText.textContent = `OpenAI Activo (${stats.model_name || "gpt-6-luna"})`;
+        } else {
+          statusText.textContent = `Harness Activo (${stats.status})`;
+        }
+      }
+      const apiModelName = document.getElementById("apiModelName");
+      if (apiModelName && stats.api_model) {
+        apiModelName.textContent = stats.api_model;
+      }
       const badgeDbCount = document.getElementById("badgeDbCount");
       if (badgeDbCount && stats.vector_store) {
         badgeDbCount.textContent = `${stats.vector_store.total_chunks.toLocaleString()} Chunks Activos`;

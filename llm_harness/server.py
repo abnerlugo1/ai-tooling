@@ -48,11 +48,15 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
 
         if parsed_url.path == "/api/stats":
             store = VectorStore(db_path=".vector_store.db")
+            client = APIModelClient()
+            is_openai = bool(client.api_key and client.api_key.startswith("sk-")) or "gpt" in client.model_name.lower()
             stats_data = {
-                "api_model": "Anthropic Claude 3.5 Sonnet / AWS Bedrock",
+                "api_model": f"OpenAI {client.model_name} (Activo)" if is_openai else client.model_name,
                 "embedded_model": "Qwen 2.5 Coder 7B GGUF (In-Process)",
                 "vector_store": store.stats(),
                 "status": "ready",
+                "openai_active": is_openai,
+                "model_name": client.model_name,
             }
             self._send_json(stats_data)
             return
@@ -243,10 +247,13 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
         # 5. Agentic Orchestrator endpoint
         if parsed_url.path == "/api/orchestration/run":
             query = body.get("query", "¿Cuál es el servicio más solicitado y cuál es la edad promedio de los clientes?").strip()
-            model_type = body.get("model", "api").lower()
+            model_type = body.get("model", "openai").lower()
 
             from orchestration.agent import OrchestratorAgent
-            llm = APIModelClient() if model_type == "api" else EmbeddedModelClient()
+            if model_type in ("openai", "api", "gpt-6-luna", "cloud"):
+                llm = APIModelClient()
+            else:
+                llm = EmbeddedModelClient()
             agent = OrchestratorAgent(llm=llm)
 
             trace = agent.run(query)
@@ -257,6 +264,13 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
 
 
 def run_server(host: Optional[str] = None, port: Optional[int] = None) -> None:
+    try:
+        from dotenv import load_dotenv
+        env_file = Path(__file__).resolve().parent.parent / ".env"
+        if env_file.exists():
+            load_dotenv(env_file)
+    except Exception:
+        pass
     host = host or os.getenv("HOST", "0.0.0.0")
     port = port or int(os.getenv("PORT", "8080"))
     server_address = (host, port)

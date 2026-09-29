@@ -207,8 +207,52 @@ class OrchestratorAgent:
         trace.total_latency_ms = (time.perf_counter() - start_time) * 1000.0
         return trace
 
+    def _generate_sql_with_llm(self, query: str) -> Optional[str]:
+        """Uses LLM to dynamically generate SQL query for SQLite dashboard table."""
+        prompt = (
+            "Eres un motor Text-to-SQL para SQLite.\n"
+            "Esquema de la tabla 'dashboard':\n"
+            "CREATE TABLE dashboard (\n"
+            "  id INTEGER PRIMARY KEY,\n"
+            "  cliente TEXT,\n"
+            "  servicio TEXT,\n"
+            "  edad INTEGER,\n"
+            "  genero TEXT,\n"
+            "  fecha TEXT,\n"
+            "  categoria TEXT,\n"
+            "  anio INTEGER\n"
+            ");\n\n"
+            f"Pregunta del usuario: '{query}'\n\n"
+            "Genera SOLAMENTE la consulta SQL SELECT para SQLite sin formato markdown, sin explicaciones ni prefijos.\n"
+            "Ejemplo de salida directa: SELECT servicio, COUNT(*) as total FROM dashboard GROUP BY servicio ORDER BY total DESC LIMIT 5;"
+        )
+        try:
+            req = LLMRequest(prompt=prompt, max_tokens=150, temperature=0.0)
+            res = self.llm.generate(req)
+            candidate = res.text.strip()
+            # Clean markdown formatting if present
+            candidate = re.sub(r"^```(?:sql)?\s*", "", candidate, flags=re.IGNORECASE)
+            candidate = re.sub(r"\s*```$", "", candidate)
+            candidate = candidate.strip()
+            # Strip trailing semicolon for uniformity or keep it
+            if candidate.upper().startswith("SELECT"):
+                return candidate
+        except Exception as e:
+            print(f"[!] Info: Text-to-SQL with LLM fallback ({e})")
+        return None
+
     def _generate_sql(self, query: str) -> str:
-        """Determines appropriate SQL query based on natural language intent."""
+        """Determines appropriate SQL query using LLM if available or rule-based patterns."""
+        # Try LLM generation if available and not forced simulation
+        if getattr(self.llm, "architecture", None) == ArchitectureType.API:
+            # Check if real API is available
+            api_key = getattr(self.llm, "api_key", None)
+            force_sim = getattr(self.llm, "force_simulation", False)
+            if api_key and not force_sim:
+                llm_sql = self._generate_sql_with_llm(query)
+                if llm_sql:
+                    return llm_sql
+
         q = query.lower()
 
         if "edad promedio" in q or "promedio de edad" in q:
