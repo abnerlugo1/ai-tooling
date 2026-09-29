@@ -3,13 +3,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const tabBtnLLM = document.getElementById("tabBtnLLM");
   const tabBtnEmbeddings = document.getElementById("tabBtnEmbeddings");
   const tabBtnOrchestrator = document.getElementById("tabBtnOrchestrator");
+  const tabBtnKPI = document.getElementById("tabBtnKPI");
   const viewLLM = document.getElementById("viewLLM");
   const viewEmbeddings = document.getElementById("viewEmbeddings");
   const viewOrchestrator = document.getElementById("viewOrchestrator");
+  const viewKPI = document.getElementById("viewKPI");
 
   function switchTab(tab) {
-    [tabBtnLLM, tabBtnEmbeddings, tabBtnOrchestrator].forEach(b => b?.classList.remove("active"));
-    [viewLLM, viewEmbeddings, viewOrchestrator].forEach(v => { if (v) v.style.display = "none"; });
+    [tabBtnLLM, tabBtnEmbeddings, tabBtnOrchestrator, tabBtnKPI].forEach(b => b?.classList.remove("active"));
+    [viewLLM, viewEmbeddings, viewOrchestrator, viewKPI].forEach(v => { if (v) v.style.display = "none"; });
 
     if (tab === "llm") {
       tabBtnLLM?.classList.add("active");
@@ -24,12 +26,16 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (tab === "orchestrator") {
       tabBtnOrchestrator?.classList.add("active");
       if (viewOrchestrator) viewOrchestrator.style.display = "block";
+    } else if (tab === "kpi") {
+      tabBtnKPI?.classList.add("active");
+      if (viewKPI) viewKPI.style.display = "block";
     }
   }
 
   tabBtnLLM?.addEventListener("click", () => switchTab("llm"));
   tabBtnEmbeddings?.addEventListener("click", () => switchTab("embeddings"));
   tabBtnOrchestrator?.addEventListener("click", () => switchTab("orchestrator"));
+  tabBtnKPI?.addEventListener("click", () => switchTab("kpi"));
 
   // ==========================================
   // TAB 1: LLM COMPARISON
@@ -614,5 +620,132 @@ document.addEventListener("DOMContentLoaded", () => {
 
   btnPrintReport?.addEventListener("click", () => {
     window.print();
+  });
+
+  // ==========================================
+  // TAB 4: KPI ANALYTICS COPILOT (dashboard.db)
+  // ==========================================
+  const kpiQueryInput = document.getElementById("kpiQueryInput");
+  const btnRunKPI = document.getElementById("btnRunKPI");
+  const kpiResultSection = document.getElementById("kpiResultSection");
+  const kpiMetaSubtitle = document.getElementById("kpiMetaSubtitle");
+  const kpiGuardAlert = document.getElementById("kpiGuardAlert");
+  const kpiGuardText = document.getElementById("kpiGuardText");
+  const kpiAnalysisContent = document.getElementById("kpiAnalysisContent");
+  const kpiAnalysisText = document.getElementById("kpiAnalysisText");
+  const kpiSqlCode = document.getElementById("kpiSqlCode");
+  const kpiRowCount = document.getElementById("kpiRowCount");
+  const kpiTableWrapper = document.getElementById("kpiTableWrapper");
+  const btnCopyKPI = document.getElementById("btnCopyKPI");
+
+  // KPI Presets
+  document.getElementById("kpiPreset1")?.addEventListener("click", () => {
+    kpiQueryInput.value = "¿Cuál es la edad promedio de los clientes desglosada por cada categoría de servicio?";
+  });
+  document.getElementById("kpiPreset2")?.addEventListener("click", () => {
+    kpiQueryInput.value = "¿Cuáles son los 5 servicios más solicitados en total y cuántas solicitudes tiene cada uno?";
+  });
+  document.getElementById("kpiPreset3")?.addEventListener("click", () => {
+    kpiQueryInput.value = "¿Cuál es el porcentaje y cantidad total de clientes por género en la base de datos?";
+  });
+  document.getElementById("kpiPreset4")?.addEventListener("click", () => {
+    kpiQueryInput.value = "¿Cuántas solicitudes corresponden a Asistencia vial y cuál es el servicio más frecuente dentro de esta categoría?";
+  });
+  document.getElementById("kpiPreset5")?.addEventListener("click", () => {
+    kpiQueryInput.value = "¿Cómo se distribuyen las solicitudes por fecha o año en dashboard.db?";
+  });
+
+  btnCopyKPI?.addEventListener("click", () => {
+    if (kpiAnalysisText) {
+      navigator.clipboard.writeText(kpiAnalysisText.textContent);
+      btnCopyKPI.textContent = "¡Copiado!";
+      setTimeout(() => { btnCopyKPI.textContent = "Copiar Análisis"; }, 1500);
+    }
+  });
+
+  async function runKPIQuery() {
+    const query = kpiQueryInput?.value.trim();
+    if (!query) return;
+
+    btnRunKPI.disabled = true;
+    btnRunKPI.innerHTML = `
+      <svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+        <path d="M12 2a10 10 0 0 1 10 10" />
+      </svg>
+      <span>Consultando con OpenAI...</span>
+    `;
+
+    kpiResultSection.style.display = "block";
+    kpiGuardAlert.style.display = "none";
+    kpiAnalysisContent.style.display = "block";
+    kpiAnalysisText.textContent = "Generando consulta SQL y analizando métricas cuantitativas con OpenAI gpt-6-luna...";
+    kpiSqlCode.textContent = "Generando sentencia SQL...";
+    kpiTableWrapper.innerHTML = "<div class='empty-state'>Cargando datos desde SQLite...</div>";
+
+    try {
+      const resp = await fetch("/api/kpi/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: query }),
+      });
+
+      if (!resp.ok) throw new Error(`HTTP Error ${resp.status}`);
+      const data = await resp.json();
+
+      kpiMetaSubtitle.textContent = `Modelo: ${data.model_name || "OpenAI gpt-6-luna"} | Latencia: ${data.latency_ms} ms | Base de Datos: dashboard.db (${data.total_db_records.toLocaleString()} registros)`;
+
+      // Handle guardrail out-of-scope response
+      if (data.is_kpi_query === false) {
+        kpiGuardAlert.style.display = "flex";
+        kpiGuardText.textContent = data.analysis;
+        kpiAnalysisContent.style.display = "none";
+        return;
+      }
+
+      // Valid KPI Response
+      kpiGuardAlert.style.display = "none";
+      kpiAnalysisContent.style.display = "block";
+      kpiAnalysisText.textContent = data.analysis;
+      kpiSqlCode.textContent = data.sql || "--";
+
+      // Render Data Table
+      kpiRowCount.textContent = data.total_rows || 0;
+      if (data.rows && data.rows.length > 0) {
+        const cols = Object.keys(data.rows[0]);
+        let tableHtml = `<table class="kpi-data-table"><thead><tr>`;
+        cols.forEach(c => tableHtml += `<th>${c}</th>`);
+        tableHtml += `</tr></thead><tbody>`;
+        data.rows.forEach(r => {
+          tableHtml += `<tr>`;
+          cols.forEach(c => tableHtml += `<td>${r[c] !== null && r[c] !== undefined ? r[c] : ""}</td>`);
+          tableHtml += `</tr>`;
+        });
+        tableHtml += `</tbody></table>`;
+        kpiTableWrapper.innerHTML = tableHtml;
+      } else {
+        kpiTableWrapper.innerHTML = "<div class='empty-state'>Sin filas devueltas para los criterios especificados.</div>";
+      }
+
+    } catch (err) {
+      console.error(err);
+      kpiAnalysisText.textContent = `Error al consultar KPI: ${err.message}`;
+    } finally {
+      btnRunKPI.disabled = false;
+      btnRunKPI.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+        <span>Consultar KPI con OpenAI</span>
+      `;
+    }
+  }
+
+  btnRunKPI?.addEventListener("click", runKPIQuery);
+  kpiQueryInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      runKPIQuery();
+    }
   });
 });

@@ -260,6 +260,19 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(trace.to_dict())
             return
 
+        # 6. Dedicated OpenAI KPI Analytics Copilot endpoint (strictly for dashboard.db)
+        if parsed_url.path == "/api/kpi/query":
+            query = body.get("query", "").strip()
+            if not query:
+                self._send_json({"error": "El campo 'query' es obligatorio"}, status=400)
+                return
+
+            from orchestration.kpi_copilot import KPICopilot
+            copilot = KPICopilot()
+            result = copilot.ask_kpi(query)
+            self._send_json(result)
+            return
+
         self._send_json({"error": f"Endpoint not found: {parsed_url.path}"}, status=404)
 
 
