@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
+import urllib.parse
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Dict
-import urllib.parse
+from typing import Any, Dict, Optional
 
 from ingestion.pipeline import IngestionPipeline
 from ingestion.vector_store import VectorStore
@@ -255,7 +256,9 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
         self._send_json({"error": f"Endpoint not found: {parsed_url.path}"}, status=404)
 
 
-def run_server(host: str = "127.0.0.1", port: int = 8080) -> None:
+def run_server(host: Optional[str] = None, port: Optional[int] = None) -> None:
+    host = host or os.getenv("HOST", "0.0.0.0")
+    port = port or int(os.getenv("PORT", "8080"))
     server_address = (host, port)
     httpd = HTTPServer(server_address, HarnessRequestHandler)
     print(f"[+] LLM Architecture Test Harness running at http://{host}:{port}/")

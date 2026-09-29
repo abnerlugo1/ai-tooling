@@ -13,9 +13,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
-# Rutas predeterminadas
-DEFAULT_EXCEL_PATH = Path(r"c:\Users\abner\.gemini\antigravity-ide\scratch\ai-tooling\Documents\dashboard .xlsx")
-DEFAULT_DB_PATH = Path(r"c:\Users\abner\.gemini\antigravity-ide\scratch\ai-tooling\Documents\dashboard.db")
+# Rutas predeterminadas relativas al directorio del archivo/proyecto
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_EXCEL_PATH = Path(os.getenv("EXCEL_PATH", str(BASE_DIR / "Documents" / "dashboard .xlsx")))
+DEFAULT_DB_PATH = Path(os.getenv("SQLITE_DB_PATH", str(BASE_DIR / "Documents" / "dashboard.db")))
 
 
 class DashboardDB:
