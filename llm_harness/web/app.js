@@ -1048,9 +1048,17 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
+      // Voice Agent Output: Speak answer if auto-speak is enabled or triggered by voice
+      if ((voiceAutoSpeakToggle?.checked || voiceTriggered) && data.analysis) {
+        speakVoiceAgent(data.analysis);
+      } else {
+        setVoiceUIState("idle", "Respuesta analítica lista. Haz clic en 'Escuchar' o formula otra pregunta.");
+      }
+
     } catch (err) {
       console.error(err);
       if (kpiPromptAnswerText) kpiPromptAnswerText.textContent = `Error al consultar base de datos: ${err.message}`;
+      setVoiceUIState("idle", `Error: ${err.message}`);
     } finally {
       btnSubmitKpiPrompt.disabled = false;
       btnSubmitKpiPrompt.innerHTML = `
@@ -1062,11 +1070,275 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  btnSubmitKpiPrompt?.addEventListener("click", executeKpiPromptQuery);
+  btnSubmitKpiPrompt?.addEventListener("click", () => executeKpiPromptQuery(false));
   kpiPromptInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      executeKpiPromptQuery();
+      executeKpiPromptQuery(false);
     }
   });
+
+  // ==========================================
+  // VOICE AGENT ENGINE FOR VISUAL KPI DASHBOARD
+  // ==========================================
+  let currentAudio = null;
+  let voiceRecognition = null;
+  let isListening = false;
+  let isSpeaking = false;
+
+  const btnVoiceMic = document.getElementById("btnVoiceMic");
+  const btnVoiceStop = document.getElementById("btnVoiceStop");
+  const btnQuickMic = document.getElementById("btnQuickMic");
+  const btnPlayPromptAudio = document.getElementById("btnPlayPromptAudio");
+  const voiceModelSelect = document.getElementById("voiceModelSelect");
+  const voiceAutoSpeakToggle = document.getElementById("voiceAutoSpeakToggle");
+  const voiceStatusDot = document.getElementById("voiceStatusDot");
+  const voiceStatusPillText = document.getElementById("voiceStatusPillText");
+  const voiceStatusMessage = document.getElementById("voiceStatusMessage");
+  const voiceWaveform = document.getElementById("voiceWaveform");
+  const voiceTranscriptBubble = document.getElementById("voiceTranscriptBubble");
+  const voiceTranscriptText = document.getElementById("voiceTranscriptText");
+
+  function setVoiceUIState(state, message) {
+    if (voiceWaveform) {
+      if (state === "listening" || state === "speaking") {
+        voiceWaveform.classList.add("active");
+      } else {
+        voiceWaveform.classList.remove("active");
+      }
+    }
+
+    if (btnVoiceMic) {
+      if (state === "listening") {
+        btnVoiceMic.classList.add("listening");
+      } else {
+        btnVoiceMic.classList.remove("listening");
+      }
+    }
+
+    if (btnQuickMic) {
+      if (state === "listening") {
+        btnQuickMic.classList.add("recording");
+      } else {
+        btnQuickMic.classList.remove("recording");
+      }
+    }
+
+    if (btnVoiceStop) {
+      btnVoiceStop.style.display = (state === "listening" || state === "speaking" || state === "processing") ? "inline-flex" : "none";
+    }
+
+    if (voiceStatusDot) {
+      voiceStatusDot.className = "status-dot";
+      if (state === "listening") voiceStatusDot.classList.add("dot-pink");
+      else if (state === "speaking") voiceStatusDot.classList.add("dot-purple");
+      else if (state === "processing") voiceStatusDot.classList.add("dot-amber");
+      else voiceStatusDot.classList.add("dot-cyan");
+    }
+
+    if (voiceStatusPillText) {
+      if (state === "listening") voiceStatusPillText.textContent = "Escuchando...";
+      else if (state === "speaking") voiceStatusPillText.textContent = "Hablando...";
+      else if (state === "processing") voiceStatusPillText.textContent = "Consultando...";
+      else voiceStatusPillText.textContent = "En Espera";
+    }
+
+    if (voiceStatusMessage && message) {
+      voiceStatusMessage.innerHTML = message;
+    }
+  }
+
+  function stopVoiceAgent() {
+    // 1. Stop audio playback (barge-in)
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      currentAudio = null;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    isSpeaking = false;
+
+    // 2. Stop speech recognition
+    if (voiceRecognition && isListening) {
+      try {
+        voiceRecognition.stop();
+      } catch (e) {}
+    }
+    isListening = false;
+
+    setVoiceUIState("idle", "Listo. Haz clic en el micrófono y di tu pregunta en voz alta.");
+  }
+
+  btnVoiceStop?.addEventListener("click", stopVoiceAgent);
+
+  // Text-To-Speech (OpenAI TTS or Browser Native Fallback)
+  async function speakVoiceAgent(rawText) {
+    if (!rawText || rawText === "--") return;
+
+    // Barge-in: stop any previous audio
+    stopVoiceAgent();
+    isSpeaking = true;
+    setVoiceUIState("speaking", "🔊 Reproduciendo análisis de voz con OpenAI...");
+
+    const selectedVoice = voiceModelSelect ? voiceModelSelect.value : "alloy";
+
+    // Clean text for speech
+    let textToSpeak = rawText
+      .replace(/#+\s*/g, "")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\*([^*]+)\*/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\[AVISO\]|\[KPI\]|\[EJEMPLOS\]/g, "")
+      .replace(/SELECT[\s\S]*?FROM[\s\S]*?;/gi, "")
+      .trim();
+
+    // Use browser native speech synthesis if requested or offline
+    if (selectedVoice === "browser") {
+      playBrowserSpeech(textToSpeak);
+      return;
+    }
+
+    try {
+      const resp = await fetch("/api/kpi/voice-tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: textToSpeak,
+          voice: selectedVoice,
+        }),
+      });
+
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+
+      const audioBlob = await resp.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      currentAudio = new Audio(audioUrl);
+
+      currentAudio.onended = () => {
+        isSpeaking = false;
+        setVoiceUIState("idle", "Voz completada. Puedes hacer otra pregunta cuando gustes.");
+      };
+
+      currentAudio.onerror = (err) => {
+        console.warn("Audio playback error, fallback to browser TTS:", err);
+        playBrowserSpeech(textToSpeak);
+      };
+
+      await currentAudio.play();
+
+    } catch (err) {
+      console.warn("OpenAI TTS fetch failed, using browser speech fallback:", err);
+      playBrowserSpeech(textToSpeak);
+    }
+  }
+
+  function playBrowserSpeech(text) {
+    if (!window.speechSynthesis) {
+      isSpeaking = false;
+      setVoiceUIState("idle", "Listo.");
+      return;
+    }
+
+    const utter = new SpeechSynthesisUtterance(text.slice(0, 500));
+    utter.lang = "es-MX";
+    utter.rate = 1.05;
+
+    // Pick a natural Spanish voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const esVoice = voices.find(v => v.lang.startsWith("es"));
+    if (esVoice) utter.voice = esVoice;
+
+    utter.onend = () => {
+      isSpeaking = false;
+      setVoiceUIState("idle", "Voz completada.");
+    };
+
+    utter.onerror = () => {
+      isSpeaking = false;
+      setVoiceUIState("idle", "Listo.");
+    };
+
+    window.speechSynthesis.speak(utter);
+  }
+
+  // Play button in response card
+  btnPlayPromptAudio?.addEventListener("click", () => {
+    if (kpiPromptAnswerText) {
+      speakVoiceAgent(kpiPromptAnswerText.textContent);
+    }
+  });
+
+  // Speech-To-Text Recognition
+  function toggleVoiceListening() {
+    if (isListening) {
+      stopVoiceAgent();
+      return;
+    }
+
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      alert("Tu navegador no soporta Web Speech API para reconocimiento de voz directo. Puedes usar Google Chrome, Microsoft Edge o ingresar tu pregunta en el prompt.");
+      return;
+    }
+
+    stopVoiceAgent();
+    isListening = true;
+
+    voiceRecognition = new SpeechRec();
+    voiceRecognition.lang = "es-MX";
+    voiceRecognition.continuous = false;
+    voiceRecognition.interimResults = true;
+
+    setVoiceUIState("listening", "🎙️ <strong>Escuchando...</strong> Habla ahora sobre la base de datos.");
+    if (voiceTranscriptBubble) voiceTranscriptBubble.style.display = "flex";
+    if (voiceTranscriptText) voiceTranscriptText.textContent = "Escuchando voz...";
+
+    let finalTranscript = "";
+
+    voiceRecognition.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+      const liveText = finalTranscript || interim;
+      if (voiceTranscriptText) voiceTranscriptText.textContent = liveText;
+      if (kpiPromptInput) kpiPromptInput.value = liveText;
+    };
+
+    voiceRecognition.onerror = (e) => {
+      console.warn("Speech recognition error:", e.error);
+      isListening = false;
+      setVoiceUIState("idle", `Error de micrófono: ${e.error}. Haz clic para reintentar.`);
+    };
+
+    voiceRecognition.onend = () => {
+      isListening = false;
+      const question = finalTranscript.trim() || (kpiPromptInput ? kpiPromptInput.value.trim() : "");
+      if (question) {
+        setVoiceUIState("processing", `⚙️ Procesando consulta de voz: <em>"${question}"</em>...`);
+        executeKpiPromptQuery(true); // pass voiceTriggered = true
+      } else {
+        setVoiceUIState("idle", "No se detectó audio. Haz clic en el micrófono para hablar.");
+      }
+    };
+
+    try {
+      voiceRecognition.start();
+    } catch (err) {
+      console.error(err);
+      isListening = false;
+      setVoiceUIState("idle", "Error al iniciar micrófono.");
+    }
+  }
+
+  btnVoiceMic?.addEventListener("click", toggleVoiceListening);
+  btnQuickMic?.addEventListener("click", toggleVoiceListening);
 });

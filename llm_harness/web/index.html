@@ -584,8 +584,95 @@
               </button>
             </div>
           </div>
+        </section>
 
-          <!-- Top 4 KPI Metric Scorecards -->
+        <!-- Voice Agent Hero Section for Visual KPI Dashboard -->
+        <section class="glass-card kpi-voice-agent-card">
+          <div class="voice-agent-header">
+            <div class="voice-title-wrap">
+              <div class="voice-avatar-glow">
+                <span class="voice-avatar-icon">🎙️</span>
+              </div>
+              <div>
+                <div class="voice-badge-row">
+                  <span class="badge badge-primary">Agente de Voz Activo</span>
+                  <span class="voice-status-pill" id="voiceStatusPill">
+                    <span class="status-dot dot-cyan" id="voiceStatusDot"></span>
+                    <span id="voiceStatusPillText">En Espera</span>
+                  </span>
+                </div>
+                <h3 class="voice-main-title">Copiloto de Voz para el Dashboard de KPIs</h3>
+                <p class="voice-subtitle">Habla libremente con el asistente. Consultará en tiempo real la base de datos SQLite y te responderá con voz sintética de alta fidelidad.</p>
+              </div>
+            </div>
+
+            <!-- Voice Controls & Settings -->
+            <div class="voice-controls-bar">
+              <div class="voice-setting-item">
+                <label for="voiceModelSelect" class="voice-label">Voz:</label>
+                <select id="voiceModelSelect" class="form-select voice-select">
+                  <option value="alloy" selected>OpenAI Alloy (Ejecutiva Natural)</option>
+                  <option value="nova">OpenAI Nova (Dinámica y Expresiva)</option>
+                  <option value="shimmer">OpenAI Shimmer (Clara y Formal)</option>
+                  <option value="browser">Voz de Sistema Local (Offline)</option>
+                </select>
+              </div>
+              <div class="voice-setting-item">
+                <label class="voice-checkbox-label">
+                  <input type="checkbox" id="voiceAutoSpeakToggle" checked />
+                  <span>Hablar respuesta automáticamente</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive Center: Big Mic Button, Live Waveform & Live Transcript -->
+          <div class="voice-interactive-center">
+            <div class="voice-btn-group">
+              <button type="button" class="voice-mic-btn" id="btnVoiceMic" title="Haz clic para hablar o detener">
+                <svg class="mic-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                  <line x1="12" y1="19" x2="12" y2="23"></line>
+                  <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+                <span class="mic-ring"></span>
+              </button>
+              <button type="button" class="voice-stop-btn" id="btnVoiceStop" style="display: none;" title="Interrumpir / Detener Voz">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                </svg>
+                <span>Detener Audio</span>
+              </button>
+            </div>
+
+            <div class="voice-wave-and-status">
+              <div class="voice-status-line" id="voiceStatusMessage">
+                Haz clic en el micrófono y di tu pregunta (ej: <em>"¿Cuáles son los 5 servicios más solicitados?"</em>)
+              </div>
+
+              <!-- Animated Audio Waveform -->
+              <div class="voice-waveform" id="voiceWaveform">
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+              </div>
+
+              <!-- Real-time Live Transcript -->
+              <div class="voice-transcript-bubble" id="voiceTranscriptBubble" style="display: none;">
+                <span class="transcript-prefix">Escuchado:</span>
+                <span class="transcript-text" id="voiceTranscriptText">...</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Top 4 KPI Metric Scorecards -->
           <div class="kpi-scorecards-grid">
             <div class="kpi-scorecard">
               <div class="scorecard-icon icon-cyan">📊</div>
@@ -711,7 +798,15 @@
           <!-- Prompt Input Form -->
           <div class="kpi-prompt-input-box">
             <textarea id="kpiPromptInput" class="kpi-prompt-textarea" rows="2"
-                      placeholder="Escribe tu pregunta sobre la base de datos... Ej: ¿Cuál es el servicio más solicitado y qué promedio de edad tienen los clientes?"></textarea>
+                      placeholder="Escribe o dicta tu pregunta sobre la base de datos... Ej: ¿Cuál es el servicio más solicitado y qué promedio de edad tienen los clientes?"></textarea>
+            <button type="button" class="btn-quick-mic" id="btnQuickMic" title="Dictar pregunta con tu voz">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+              </svg>
+            </button>
             <button type="button" class="kpi-prompt-submit-btn" id="btnSubmitKpiPrompt">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -736,7 +831,10 @@
                   <span class="kpi-prompt-stat" id="kpiPromptLatency">Latencia: -- ms</span>
                   <span class="kpi-prompt-stat" id="kpiPromptRowCount">Filas: --</span>
                 </div>
-                <button type="button" class="btn-copy" id="btnCopyPromptAnswer">Copiar Respuesta</button>
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" class="btn-voice-play" id="btnPlayPromptAudio">🔊 Escuchar</button>
+                  <button type="button" class="btn-copy" id="btnCopyPromptAnswer">Copiar Respuesta</button>
+                </div>
               </div>
 
               <!-- AI Synthesized Answer -->

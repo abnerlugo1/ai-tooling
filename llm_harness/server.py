@@ -289,6 +289,46 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(analysis_res)
             return
 
+        # 8. Voice Agent Text-To-Speech (OpenAI TTS)
+        if parsed_url.path == "/api/kpi/voice-tts":
+            text = body.get("text", "").strip()
+            voice = body.get("voice", "alloy")
+            if not text:
+                self._send_json({"error": "Texto vacío"}, status=400)
+                return
+
+            import re
+            # Clean markdown and special symbols for natural speech pronunciation
+            clean_text = re.sub(r"#+\s*", "", text)
+            clean_text = re.sub(r"\*\*([^*]+)\*\*", r"\1", clean_text)
+            clean_text = re.sub(r"\*([^*]+)\*", r"\1", clean_text)
+            clean_text = re.sub(r"`([^`]+)`", r"\1", clean_text)
+            clean_text = re.sub(r"\[AVISO\]|\[KPI\]|\[EJEMPLOS\]", "", clean_text)
+            # Remove raw SQL or tabular block artifacts if present
+            clean_text = re.sub(r"SELECT.*?FROM.*?;", "", clean_text, flags=re.DOTALL | re.IGNORECASE)
+            # Limit spoken text to ~800 chars for responsive audio streaming
+            clean_text = clean_text[:800].strip()
+
+            try:
+                import openai
+                api_key = os.getenv("OPENAI_API_KEY")
+                client = openai.OpenAI(api_key=api_key)
+                response = client.audio.speech.create(
+                    model="tts-1",
+                    voice=voice,
+                    input=clean_text,
+                )
+                audio_bytes = response.content
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/mpeg")
+                self.send_header("Content-Length", str(len(audio_bytes)))
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(audio_bytes)
+            except Exception as e:
+                self._send_json({"error": f"Error al generar audio TTS: {str(e)}"}, status=500)
+            return
+
         self._send_json({"error": f"Endpoint not found: {parsed_url.path}"}, status=404)
 
 
