@@ -239,6 +239,19 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(resp_data)
             return
 
+        # 5. Agentic Orchestrator endpoint
+        if parsed_url.path == "/api/orchestration/run":
+            query = body.get("query", "¿Cuál es el servicio más solicitado y cuál es la edad promedio de los clientes?").strip()
+            model_type = body.get("model", "api").lower()
+
+            from orchestration.agent import OrchestratorAgent
+            llm = APIModelClient() if model_type == "api" else EmbeddedModelClient()
+            agent = OrchestratorAgent(llm=llm)
+
+            trace = agent.run(query)
+            self._send_json(trace.to_dict())
+            return
+
         self._send_json({"error": f"Endpoint not found: {parsed_url.path}"}, status=404)
 
 

@@ -61,7 +61,16 @@
           <circle cx="12" cy="12" r="3"></circle>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
         </svg>
-        <span>Explorador Visual de Embeddings & Vector Store</span>
+        <span>Explorador Visual de Embeddings</span>
+      </button>
+
+      <button type="button" class="tab-btn" id="tabBtnOrchestrator" role="tab" aria-selected="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+        <span>Agente Orquestador (Tool Use ReAct)</span>
       </button>
     </nav>
 
@@ -458,8 +467,78 @@
           <div class="vector-results-container" id="vectorResultsContainer">
             <div class="empty-state">Ingresa una consulta para buscar chunks relevantes en el Vector Store.</div>
           </div>
-        </section>
       </div><!-- End viewEmbeddings -->
+
+      <!-- VIEW 3: Agentic AI Orchestrator (Tool Use ReAct) -->
+      <div id="viewOrchestrator" style="display: none;">
+        <section class="control-panel glass-card">
+          <div class="panel-header">
+            <div>
+              <h2>Agente Orquestador Autónomo (ReAct + Tool Use)</h2>
+              <p class="panel-subtitle">El agente descompone la consulta, planifica y ejecuta herramientas (SQLite Text-to-SQL, Vector Search RAG, Ingestion) de manera autónoma.</p>
+            </div>
+            <span class="badge badge-primary">Ciclo ReAct Multi-Tool</span>
+          </div>
+
+          <!-- Presets -->
+          <div class="preset-bar">
+            <span class="preset-label">Consultas de Prueba:</span>
+            <button type="button" class="preset-btn" id="orchPreset1">📊 Top Servicios y Edad Promedio (SQL)</button>
+            <button type="button" class="preset-btn" id="orchPreset2">🔍 Plomería y Fugas de Agua (RAG Semántico)</button>
+            <button type="button" class="preset-btn" id="orchPreset3">👥 Distribución y % por Género (SQL)</button>
+            <button type="button" class="preset-btn" id="orchPreset4">🚗 Solicitudes de Asistencia Vial (SQL)</button>
+          </div>
+
+          <div class="input-group">
+            <label for="orchQueryInput">Objetivo o Pregunta para el Agente:</label>
+            <textarea id="orchQueryInput" rows="2" class="form-input" placeholder="Pregunta algo sobre los clientes, servicios o métricas...">¿Cuál es el servicio más solicitado en el dashboard y cuál es la edad promedio de los clientes que lo contrataron?</textarea>
+          </div>
+
+          <div class="controls-row">
+            <div class="control-item">
+              <label for="orchModelSelect">Modelo de Razonamiento:</label>
+              <select id="orchModelSelect" class="form-select">
+                <option value="api" selected>Cloud Managed (Claude 3.5 Sonnet / AWS Bedrock)</option>
+                <option value="embedded">In-Process Local (Qwen 2.5 Coder 7B GGUF)</option>
+              </select>
+            </div>
+
+            <button type="button" class="btn-primary" id="btnRunOrchestrator">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              <span>Ejecutar Agente Orquestador</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- ReAct Trace Execution Container -->
+        <section class="glass-card orch-trace-section" id="orchTraceSection" style="display: none;">
+          <div class="panel-header">
+            <div>
+              <h3>Traza de Razonamiento del Agente (Execution Trace)</h3>
+              <p class="panel-subtitle" id="orchTraceSubtitle">Modelo: -- | Latencia: -- ms</p>
+            </div>
+            <div class="tools-invoked-container" id="toolsInvokedContainer">
+              <!-- Badges for invoked tools -->
+            </div>
+          </div>
+
+          <!-- Steps Timeline -->
+          <div class="react-timeline" id="reactTimeline">
+            <!-- Dynamically injected ReAct steps -->
+          </div>
+
+          <!-- Final Answer Card -->
+          <div class="orch-final-answer-card">
+            <div class="final-answer-header">
+              <span class="badge badge-success">Respuesta Final Fundamentada</span>
+              <button type="button" class="btn-copy" id="btnCopyOrchAnswer">Copiar</button>
+            </div>
+            <div class="final-answer-body" id="orchFinalAnswerText">--</div>
+          </div>
+        </section>
+      </div><!-- End viewOrchestrator -->
     </main>
 
     <footer class="app-footer">

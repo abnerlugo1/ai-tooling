@@ -2,30 +2,34 @@ document.addEventListener("DOMContentLoaded", () => {
   // Navigation Tabs
   const tabBtnLLM = document.getElementById("tabBtnLLM");
   const tabBtnEmbeddings = document.getElementById("tabBtnEmbeddings");
+  const tabBtnOrchestrator = document.getElementById("tabBtnOrchestrator");
   const viewLLM = document.getElementById("viewLLM");
   const viewEmbeddings = document.getElementById("viewEmbeddings");
+  const viewOrchestrator = document.getElementById("viewOrchestrator");
 
   function switchTab(tab) {
+    [tabBtnLLM, tabBtnEmbeddings, tabBtnOrchestrator].forEach(b => b?.classList.remove("active"));
+    [viewLLM, viewEmbeddings, viewOrchestrator].forEach(v => { if (v) v.style.display = "none"; });
+
     if (tab === "llm") {
-      tabBtnLLM.classList.add("active");
-      tabBtnEmbeddings.classList.remove("active");
-      viewLLM.style.display = "block";
-      viewEmbeddings.style.display = "none";
-    } else {
-      tabBtnEmbeddings.classList.add("active");
-      tabBtnLLM.classList.remove("active");
-      viewEmbeddings.style.display = "block";
-      viewLLM.style.display = "none";
-      // Auto-trigger cluster rendering and initial vectorization if empty
+      tabBtnLLM?.classList.add("active");
+      if (viewLLM) viewLLM.style.display = "block";
+    } else if (tab === "embeddings") {
+      tabBtnEmbeddings?.classList.add("active");
+      if (viewEmbeddings) viewEmbeddings.style.display = "block";
       loadClusterMap();
       if (!document.getElementById("vecActive").textContent || document.getElementById("vecActive").textContent === "--") {
         generateVector();
       }
+    } else if (tab === "orchestrator") {
+      tabBtnOrchestrator?.classList.add("active");
+      if (viewOrchestrator) viewOrchestrator.style.display = "block";
     }
   }
 
   tabBtnLLM?.addEventListener("click", () => switchTab("llm"));
   tabBtnEmbeddings?.addEventListener("click", () => switchTab("embeddings"));
+  tabBtnOrchestrator?.addEventListener("click", () => switchTab("orchestrator"));
 
   // ==========================================
   // TAB 1: LLM COMPARISON
@@ -413,6 +417,135 @@ document.addEventListener("DOMContentLoaded", () => {
   vectorSearchInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") runVectorSearch();
   });
+
+  // ==========================================
+  // TAB 3: AGENTIC AI ORCHESTRATOR (ReAct)
+  // ==========================================
+  const orchQueryInput = document.getElementById("orchQueryInput");
+  const orchModelSelect = document.getElementById("orchModelSelect");
+  const btnRunOrchestrator = document.getElementById("btnRunOrchestrator");
+  const orchTraceSection = document.getElementById("orchTraceSection");
+  const orchTraceSubtitle = document.getElementById("orchTraceSubtitle");
+  const toolsInvokedContainer = document.getElementById("toolsInvokedContainer");
+  const reactTimeline = document.getElementById("reactTimeline");
+  const orchFinalAnswerText = document.getElementById("orchFinalAnswerText");
+  const btnCopyOrchAnswer = document.getElementById("btnCopyOrchAnswer");
+
+  document.getElementById("orchPreset1")?.addEventListener("click", () => {
+    orchQueryInput.value = "¿Cuál es el servicio más solicitado en el dashboard y cuál es la edad promedio de los clientes que lo contrataron?";
+  });
+  document.getElementById("orchPreset2")?.addEventListener("click", () => {
+    orchQueryInput.value = "Busca registros de clientes atendidos por emergencias de plomería o fugas de agua en su hogar";
+  });
+  document.getElementById("orchPreset3")?.addEventListener("click", () => {
+    orchQueryInput.value = "¿Cuál es el porcentaje y cantidad total de solicitudes realizadas por mujeres frente a hombres?";
+  });
+  document.getElementById("orchPreset4")?.addEventListener("click", () => {
+    orchQueryInput.value = "¿Cuántas solicitudes de Asistencia vial se han realizado y qué servicios específicos incluye?";
+  });
+
+  btnCopyOrchAnswer?.addEventListener("click", () => {
+    navigator.clipboard.writeText(orchFinalAnswerText.textContent);
+    btnCopyOrchAnswer.textContent = "¡Copiado!";
+    setTimeout(() => { btnCopyOrchAnswer.textContent = "Copiar"; }, 1500);
+  });
+
+  async function runOrchestratorAgent() {
+    const query = orchQueryInput.value.trim();
+    if (!query) return;
+
+    btnRunOrchestrator.disabled = true;
+    btnRunOrchestrator.innerHTML = `
+      <svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+        <path d="M12 2a10 10 0 0 1 10 10" />
+      </svg>
+      <span>Orquestando Agente...</span>
+    `;
+
+    orchTraceSection.style.display = "block";
+    reactTimeline.innerHTML = "<div class='empty-state'>El agente está analizando el objetivo y planificando herramientas...</div>";
+    orchFinalAnswerText.textContent = "Sintetizando...";
+
+    try {
+      const resp = await fetch("/api/orchestration/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: query,
+          model: orchModelSelect.value,
+        }),
+      });
+
+      if (!resp.ok) throw new Error(`HTTP Error ${resp.status}`);
+      const trace = await resp.json();
+
+      // Render Subtitle and Tools
+      orchTraceSubtitle.textContent = `Modelo: ${trace.model_name} (${trace.architecture}) | Latencia: ${trace.total_latency_ms.toFixed(1)} ms`;
+
+      toolsInvokedContainer.innerHTML = "";
+      trace.tools_invoked.forEach(tool => {
+        const badge = document.createElement("span");
+        badge.className = "tool-badge-pill";
+        badge.innerHTML = `🛠 ${tool}`;
+        toolsInvokedContainer.appendChild(badge);
+      });
+
+      // Render Timeline Steps
+      reactTimeline.innerHTML = "";
+      trace.steps.forEach(step => {
+        const card = document.createElement("div");
+        card.className = "react-step-card";
+
+        let actionHtml = "";
+        if (step.action) {
+          actionHtml = `
+            <div class="step-action-box">
+              <span class="step-action-label">Acción: ${step.action}</span>
+              <pre class="step-action-code">${JSON.stringify(step.action_input, null, 2)}</pre>
+            </div>
+          `;
+        }
+
+        let obsHtml = "";
+        if (step.observation) {
+          obsHtml = `
+            <div class="step-obs-box">
+              <span class="step-obs-label">Observación de Datos:</span>
+              <pre class="step-obs-code">${JSON.stringify(step.observation, null, 2)}</pre>
+            </div>
+          `;
+        }
+
+        card.innerHTML = `
+          <div class="step-card-header">
+            <span class="step-num-pill">Paso #${step.step_number}</span>
+          </div>
+          <div class="step-thought"><strong>💭 Pensamiento:</strong> ${step.thought}</div>
+          ${actionHtml}
+          ${obsHtml}
+        `;
+        reactTimeline.appendChild(card);
+      });
+
+      // Render Final Answer
+      orchFinalAnswerText.textContent = trace.final_answer;
+
+    } catch (err) {
+      console.error(err);
+      orchFinalAnswerText.textContent = `Error durante la orquestación: ${err.message}`;
+    } finally {
+      btnRunOrchestrator.disabled = false;
+      btnRunOrchestrator.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+        <span>Ejecutar Agente Orquestador</span>
+      `;
+    }
+  }
+
+  btnRunOrchestrator?.addEventListener("click", runOrchestratorAgent);
 
   // Initial fetch for system stats
   fetch("/api/stats")
