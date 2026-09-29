@@ -32,6 +32,15 @@ class TestDashboardDB(unittest.TestCase):
             self.assertIn("F", metrics["distribucion_genero"])
             self.assertIn("M", metrics["distribucion_genero"])
 
+    def test_read_only_safety(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_db = Path(tmpdir) / "test_dashboard.db"
+            db = DashboardDB(excel_path=DEFAULT_EXCEL_PATH, db_path=temp_db)
+            db.init_db()
+            with self.assertRaises(sqlite3.OperationalError):
+                db.query("DROP TABLE dashboard")
+
 
 if __name__ == "__main__":
     unittest.main()

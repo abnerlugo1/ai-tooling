@@ -124,17 +124,21 @@ class DashboardDB:
 
         return len(df)
 
-    def get_connection(self) -> sqlite3.Connection:
+    def get_connection(self, read_only: bool = False) -> sqlite3.Connection:
         """Obtiene una conexión a la base de datos con acceso tipo diccionario (sqlite3.Row)."""
         if not self.db_path.exists():
             self.init_db()
-        conn = sqlite3.connect(self.db_path)
+        if read_only:
+            db_uri = f"file:{self.db_path.resolve().as_posix()}?mode=ro"
+            conn = sqlite3.connect(db_uri, uri=True)
+        else:
+            conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
 
-    def query(self, sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
-        """Ejecuta una consulta SQL y retorna los resultados como lista de diccionarios."""
-        conn = self.get_connection()
+    def query(self, sql: str, params: Tuple[Any, ...] = (), read_only: bool = True) -> List[Dict[str, Any]]:
+        """Ejecuta una consulta SQL en modo protegido (sólo lectura por defecto)."""
+        conn = self.get_connection(read_only=read_only)
         try:
             cur = conn.cursor()
             cur.execute(sql, params)
@@ -143,9 +147,9 @@ class DashboardDB:
         finally:
             conn.close()
 
-    def query_df(self, sql: str, params: Tuple[Any, ...] = ()) -> pd.DataFrame:
-        """Ejecuta una consulta SQL y retorna un DataFrame de pandas."""
-        conn = self.get_connection()
+    def query_df(self, sql: str, params: Tuple[Any, ...] = (), read_only: bool = True) -> pd.DataFrame:
+        """Ejecuta una consulta SQL en modo de sólo lectura y retorna un DataFrame de pandas."""
+        conn = self.get_connection(read_only=read_only)
         try:
             return pd.read_sql_query(sql, conn, params=params)
         finally:

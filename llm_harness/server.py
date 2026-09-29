@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import base64
+import collections
+import hmac
 import json
 import mimetypes
 import os
+import time
 import urllib.parse
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -19,12 +23,71 @@ from llm_harness.models import LLMRequest
 
 WEB_DIR = Path(__file__).parent / "web"
 
+# Rate Limiter: In-memory sliding window (max 120 req/minute per IP)
+_RATE_LIMITS = collections.defaultdict(list)
+_WINDOW_SEC = 60.0
+_MAX_REQ_PER_WINDOW = 120
+
+
+def _is_rate_limited(ip: str) -> bool:
+    now = time.time()
+    _RATE_LIMITS[ip] = [t for t in _RATE_LIMITS[ip] if now - t < _WINDOW_SEC]
+    if len(_RATE_LIMITS[ip]) >= _MAX_REQ_PER_WINDOW:
+        return True
+    _RATE_LIMITS[ip].append(now)
+    return False
+
 
 class HarnessRequestHandler(SimpleHTTPRequestHandler):
-    """Handles static web UI assets and REST API endpoints."""
+    """Handles static web UI assets and REST API endpoints with security controls."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB_DIR), **kwargs)
+
+    def end_headers(self) -> None:
+        """Injects defensive HTTP security headers to all responses."""
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        self.send_header("Permissions-Policy", "camera=(), geolocation=(), microphone=(self)")
+        super().end_headers()
+
+    def _check_auth(self, path: str) -> bool:
+        """Enforces HTTP Basic Auth if CHATBOT_AUTH_ENABLED=true (exempting /api/stats for Docker healthcheck)."""
+        auth_enabled = os.getenv("CHATBOT_AUTH_ENABLED", "false").lower() in ("true", "1", "yes")
+        if not auth_enabled:
+            return True
+
+        # Exempt healthcheck for Docker daemon
+        if path == "/api/stats":
+            return True
+
+        auth_header = self.headers.get("Authorization", "")
+        if not auth_header.startswith("Basic "):
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="AI Tooling Secure Harness"')
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b'{"error": "Autenticacion requerida (HTTP 401)"}')
+            return False
+
+        try:
+            encoded = auth_header.split(" ", 1)[1].strip()
+            decoded = base64.b64decode(encoded).decode("utf-8")
+            user, pwd = decoded.split(":", 1)
+            expected_user = os.getenv("CHATBOT_AUTH_USER", "admin")
+            expected_pass = os.getenv("CHATBOT_AUTH_PASSWORD", "autoleap2026")
+            if hmac.compare_digest(user, expected_user) and hmac.compare_digest(pwd, expected_pass):
+                return True
+        except Exception:
+            pass
+
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="AI Tooling Secure Harness"')
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(b'{"error": "Credenciales invalidas (HTTP 401)"}')
+        return False
 
     def _send_json(self, data: Dict[str, Any], status: int = 200) -> None:
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -32,7 +95,7 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
         self.wfile.write(payload)
 
@@ -40,11 +103,14 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
 
     def do_GET(self) -> None:
         parsed_url = urllib.parse.urlparse(self.path)
+
+        if not self._check_auth(parsed_url.path):
+            return
 
         if parsed_url.path == "/api/stats":
             store = VectorStore(db_path=".vector_store.db")
@@ -121,6 +187,15 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed_url = urllib.parse.urlparse(self.path)
+
+        if not self._check_auth(parsed_url.path):
+            return
+
+        client_ip = self.client_address[0] if self.client_address else "unknown"
+        if _is_rate_limited(client_ip):
+            self._send_json({"error": "Demasiadas peticiones. Límite de velocidad excedido (HTTP 429)."}, status=429)
+            return
+
         content_length = int(self.headers.get("Content-Length", 0))
         MAX_PAYLOAD_BYTES = 2 * 1024 * 1024  # 2MB limit
         if content_length > MAX_PAYLOAD_BYTES:
