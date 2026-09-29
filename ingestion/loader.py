@@ -149,6 +149,80 @@ class CSVLoader(BaseLoader):
         return docs
 
 
+class ExcelLoader(BaseLoader):
+    """Loads Excel (.xlsx, .xls) spreadsheets into individual row documents and analytical summary documents."""
+
+    def __init__(self, include_summaries: bool = True) -> None:
+        self.include_summaries = include_summaries
+
+    def load(self, source: Union[str, Path]) -> List[Document]:
+        path = Path(source)
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError("pandas y openpyxl son requeridos para ExcelLoader. Instalar con: pip install pandas openpyxl")
+
+        docs: List[Document] = []
+        excel_file = pd.ExcelFile(path)
+
+        for sheet_name in excel_file.sheet_names:
+            df = excel_file.parse(sheet_name)
+            df = df.dropna(how="all")
+
+            # Generate row-level documents
+            for idx, row in df.iterrows():
+                row_dict = {str(k): ("" if pd.isna(v) else str(v).strip()) for k, v in row.items()}
+                content_lines = [f"{col}: {val}" for col, val in row_dict.items() if val]
+                content = "\n".join(content_lines)
+
+                metadata: Dict[str, Any] = {
+                    "source": str(path.resolve()),
+                    "filename": path.name,
+                    "sheet_name": sheet_name,
+                    "row_index": idx,
+                    **row_dict,
+                }
+                docs.append(Document(content=content, metadata=metadata))
+
+            # Generate aggregate analytics summary document if requested
+            if self.include_summaries and len(df) > 0:
+                summary_lines = [
+                    f"# Resumen Analítico de la Hoja '{sheet_name}' ({path.name})",
+                    f"- Total de Registros: {len(df):,}",
+                    f"- Columnas disponibles: {', '.join(df.columns.astype(str))}",
+                ]
+
+                # If specific columns like categoria, servicio, genero exist, compute distributions
+                for col in ["categoria", "servicio", "genero"]:
+                    if col in df.columns:
+                        top_vals = df[col].value_counts().head(5).to_dict()
+                        summary_lines.append(f"\nTop 5 {col}:")
+                        for k, v in top_vals.items():
+                            pct = (v / len(df)) * 100
+                            summary_lines.append(f"  * {k}: {v:,} ({pct:.1f}%)")
+
+                if "edad" in df.columns and pd.api.types.is_numeric_dtype(df["edad"]):
+                    summary_lines.append(
+                        f"\nEstadísticas de Edad: Mínimo={df['edad'].min()}, Máximo={df['edad'].max()}, Promedio={df['edad'].mean():.1f} años"
+                    )
+
+                if "Fecha" in df.columns:
+                    summary_lines.append(f"\nRango de Fechas: Desde {df['Fecha'].min()} hasta {df['Fecha'].max()}")
+
+                summary_doc = Document(
+                    content="\n".join(summary_lines),
+                    metadata={
+                        "source": str(path.resolve()),
+                        "filename": path.name,
+                        "sheet_name": sheet_name,
+                        "is_summary": True,
+                    },
+                )
+                docs.insert(0, summary_doc)
+
+        return docs
+
+
 class DirectoryLoader(BaseLoader):
     """Scans and loads all matching documents in a directory recursively."""
 
@@ -159,6 +233,8 @@ class DirectoryLoader(BaseLoader):
         ".json": JSONLoader,
         ".jsonl": JSONLoader,
         ".csv": CSVLoader,
+        ".xlsx": ExcelLoader,
+        ".xls": ExcelLoader,
     }
 
     def __init__(

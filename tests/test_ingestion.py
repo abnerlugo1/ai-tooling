@@ -79,6 +79,17 @@ class TestLoaders(unittest.TestCase):
             self.assertEqual(len(c_docs), 2)
             self.assertIn("Engineer", c_docs[0].content)
 
+    def test_excel_loader(self):
+        excel_path = Path("Documents/dashboard .xlsx")
+        if excel_path.exists():
+            from ingestion.loader import ExcelLoader
+            loader = ExcelLoader(include_summaries=True)
+            docs = loader.load(excel_path)
+            self.assertGreater(len(docs), 2900)
+            # The first document should be the summary document
+            self.assertTrue(docs[0].metadata.get("is_summary"))
+            self.assertIn("Resumen Analítico", docs[0].content)
+
 
 class TestChunkers(unittest.TestCase):
     def test_recursive_chunker(self):
