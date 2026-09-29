@@ -567,6 +567,52 @@ document.addEventListener("DOMContentLoaded", () => {
       if (badgeDbCount && stats.vector_store) {
         badgeDbCount.textContent = `${stats.vector_store.total_chunks.toLocaleString()} Chunks Activos`;
       }
+      const repApiProvider = document.getElementById("repApiProvider");
+      if (repApiProvider && stats.api_model) {
+        repApiProvider.textContent = stats.api_model;
+      }
+      const repVectorStats = document.getElementById("repVectorStats");
+      if (repVectorStats && stats.vector_store) {
+        repVectorStats.textContent = `${stats.vector_store.total_chunks.toLocaleString()} Chunks Activos`;
+      }
     })
     .catch(() => {});
+
+  // ==========================================
+  // EXECUTIVE REPORT MODAL LOGIC
+  // ==========================================
+  const btnOpenReport = document.getElementById("btnOpenReport");
+  const reportModalOverlay = document.getElementById("reportModalOverlay");
+  const btnCloseReport = document.getElementById("btnCloseReport");
+  const btnCloseReport2 = document.getElementById("btnCloseReport2");
+  const btnPrintReport = document.getElementById("btnPrintReport");
+  const repLastQuery = document.getElementById("repLastQuery");
+  const repAgentAnswer = document.getElementById("repAgentAnswer");
+
+  btnOpenReport?.addEventListener("click", () => {
+    // Populate latest query / answer from Agent tab if available
+    const orchQuery = document.getElementById("orchQueryInput");
+    const orchAnswer = document.getElementById("orchFinalAnswerText");
+    if (orchQuery && orchQuery.value.trim() && repLastQuery) {
+      repLastQuery.textContent = orchQuery.value.trim();
+    }
+    if (orchAnswer && orchAnswer.textContent && orchAnswer.textContent !== "--" && repAgentAnswer) {
+      repAgentAnswer.textContent = orchAnswer.textContent;
+    }
+    if (reportModalOverlay) reportModalOverlay.style.display = "flex";
+  });
+
+  function closeReportModal() {
+    if (reportModalOverlay) reportModalOverlay.style.display = "none";
+  }
+
+  btnCloseReport?.addEventListener("click", closeReportModal);
+  btnCloseReport2?.addEventListener("click", closeReportModal);
+  reportModalOverlay?.addEventListener("click", (e) => {
+    if (e.target === reportModalOverlay) closeReportModal();
+  });
+
+  btnPrintReport?.addEventListener("click", () => {
+    window.print();
+  });
 });

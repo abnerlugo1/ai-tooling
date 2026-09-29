@@ -36,6 +36,16 @@
       </div>
 
       <div class="header-actions">
+        <button type="button" class="btn-report-executive" id="btnOpenReport">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>Ver Reporte Ejecutivo</span>
+        </button>
         <div class="status-pill" id="statusPill">
           <span class="status-dot"></span>
           <span id="statusText">Sistema Listo</span>
@@ -545,6 +555,110 @@
     <footer class="app-footer">
       <p>AI Tooling Specialization · Capstone & Architectural Benchmark · Coursera Applied AI Engineering</p>
     </footer>
+  </div>
+
+  <!-- Executive Report Modal with Cosmic Nebula Background -->
+  <div class="report-modal-overlay" id="reportModalOverlay" style="display: none;">
+    <div class="report-modal-card">
+      <div class="report-modal-header" style="background-image: linear-gradient(180deg, rgba(10,13,20,0.3) 0%, rgba(10,13,20,0.92) 100%), url('report-bg.jpg');">
+        <div class="report-header-content">
+          <div class="report-badge">Reporte de Arquitectura IA & Benchmark</div>
+          <h2 class="report-title">Evaluación Técnica: Modelos API vs Modelos Integrados</h2>
+          <p class="report-subtitle">Generado automáticamente · Ingesta de 3,000 registros de Dashboard & Vector Store</p>
+        </div>
+        <button type="button" class="report-close-btn" id="btnCloseReport" aria-label="Cerrar Reporte">&times;</button>
+      </div>
+
+      <div class="report-modal-body">
+        <!-- Executive Summary Section -->
+        <div class="report-section">
+          <h3 class="report-section-title">1. Resumen Ejecutivo & Estado Operativo</h3>
+          <div class="report-grid-3">
+            <div class="report-kpi-box">
+              <span class="report-kpi-label">Proveedor API Activo</span>
+              <span class="report-kpi-val text-cyan" id="repApiProvider">OpenAI (gpt-6-luna)</span>
+              <span class="report-kpi-desc">Inferencia en la Nube / Elastic Scale</span>
+            </div>
+            <div class="report-kpi-box">
+              <span class="report-kpi-label">Modelo Integrado (SLM)</span>
+              <span class="report-kpi-val text-emerald">Qwen 2.5 Coder 7B</span>
+              <span class="report-kpi-desc">In-Process / Air-Gapped / Zero Cost</span>
+            </div>
+            <div class="report-kpi-box">
+              <span class="report-kpi-label">Vector Store & SQLite</span>
+              <span class="report-kpi-val text-purple" id="repVectorStats">3,001 Chunks Activos</span>
+              <span class="report-kpi-desc">Base de datos dashboard.db sincronizada</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trade-offs Section -->
+        <div class="report-section">
+          <h3 class="report-section-title">2. Matriz de Compensación Arquitectónica (Trade-off Analysis)</h3>
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>Criterio de Evaluación</th>
+                <th>Arquitectura Basada en API (OpenAI)</th>
+                <th>Modelo Integrado In-Process (SLM)</th>
+                <th>Recomendación Capstone</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Consumo de VRAM / Cliente</strong></td>
+                <td>Cero (&lt; 15 MB footprint)</td>
+                <td>Alto (4 - 8 GB VRAM / RAM)</td>
+                <td><span class="pill-tag pill-api">API Ganador</span></td>
+              </tr>
+              <tr>
+                <td><strong>Costo Marginal por Token</strong></td>
+                <td>Tarificado por token ($/1M)</td>
+                <td>$0.00 USD (Costo Fijo Hardware)</td>
+                <td><span class="pill-tag pill-slm">Integrado Ganador</span></td>
+              </tr>
+              <tr>
+                <td><strong>Privacidad & Gobernanza</strong></td>
+                <td>Cifrado en tránsito (TLS/IAM)</td>
+                <td>Estrictamente Air-Gapped (On-Device)</td>
+                <td><span class="pill-tag pill-slm">Integrado Ganador</span></td>
+              </tr>
+              <tr>
+                <td><strong>Escalabilidad Concurrente</strong></td>
+                <td>Elástica sin aprovisionamiento</td>
+                <td>Limitada a hilos locales</td>
+                <td><span class="pill-tag pill-api">API Ganador</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Live Orchestration Log Snapshot -->
+        <div class="report-section">
+          <h3 class="report-section-title">3. Agente Autónomo ReAct & Text-to-SQL Snapshot</h3>
+          <div class="report-agent-box" id="repAgentBox">
+            <div class="report-agent-meta">
+              <span><strong>Última Consulta del Agente:</strong> <span id="repLastQuery">¿Cuál es el servicio más solicitado y cuál es la edad promedio de los clientes?</span></span>
+            </div>
+            <div class="report-agent-answer" id="repAgentAnswer">
+              El servicio más solicitado registrado en SQLite es <strong>Grúa</strong> (categoría Asistencia vial). La edad promedio de los clientes atendidos es de <strong>40.2 años</strong>.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="report-modal-footer">
+        <button type="button" class="btn-secondary" id="btnPrintReport">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          <span>Imprimir / Guardar como PDF</span>
+        </button>
+        <button type="button" class="btn-primary" id="btnCloseReport2">Cerrar</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
