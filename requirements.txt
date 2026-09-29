@@ -1,0 +1,4 @@
+# Ingestion & Processing Pipeline Dependencies
+# Core pipeline runs with standard library; optional packages enhance capabilities.
+numpy>=1.26.0; python_version < "3.14"
+pytest>=8.0.0

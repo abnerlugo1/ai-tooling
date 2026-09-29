@@ -5,3 +5,12 @@ examples/*/target/
 examples/*/tools/
 examples/*/build/
 .examples-checked
+
+# Python & Vector DB artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+.pytest_cache/
+
