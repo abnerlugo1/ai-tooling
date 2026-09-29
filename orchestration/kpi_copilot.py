@@ -28,14 +28,28 @@ class KPICopilot:
         self.llm = llm or APIModelClient()
 
     def _execute_sql(self, sql: str) -> Dict[str, Any]:
-        """Safely executes a SELECT query against dashboard.db."""
+        """Safely executes a read-only SELECT query against dashboard.db."""
         clean_sql = sql.strip().rstrip(";")
+
+        # Block semicolon chaining / multi-statement execution
+        if ";" in clean_sql:
+            return {"error": "Multi-sentencias no permitidas.", "rows": []}
+
         first_token = clean_sql.split()[0].upper() if clean_sql.split() else ""
-        if first_token != "SELECT":
-            return {"error": "Solo se permiten consultas de lectura (SELECT).", "rows": []}
+        if first_token not in ("SELECT", "WITH"):
+            return {"error": "Solo se permiten consultas de lectura (SELECT / WITH).", "rows": []}
+
+        # Check for dangerous DDL/DML tokens
+        blocked_keywords = ("ATTACH", "DETACH", "PRAGMA", "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "REPLACE")
+        tokens = set(re.findall(r"\b[A-Za-z_]+\b", clean_sql.upper()))
+        found_blocked = tokens.intersection(blocked_keywords)
+        if found_blocked:
+            return {"error": f"Operaciones no permitidas detectadas: {', '.join(found_blocked)}", "rows": []}
 
         try:
-            conn = sqlite3.connect(str(self.db_path))
+            # Enforce read-only mode at SQLite engine level
+            db_uri = f"file:{self.db_path.resolve().as_posix()}?mode=ro"
+            conn = sqlite3.connect(db_uri, uri=True)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute(clean_sql + ";")

@@ -14,3 +14,7 @@ __pycache__/
 *.db
 .pytest_cache/
 
+# Environment and sensitive keys
+.env
+.env.*
+!.env.example

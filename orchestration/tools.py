@@ -50,14 +50,23 @@ class ToolRegistry:
     def _register_default_tools(self) -> None:
         # 1. SQLite Query Tool
         def run_sql(query: str) -> Dict[str, Any]:
-            db = DashboardDB()
-            # Safety check: allow only SELECT queries
-            cleaned = query.strip().upper()
-            if not cleaned.startswith("SELECT") and not cleaned.startswith("WITH") and not cleaned.startswith("PRAGMA"):
-                return {"error": "Solo se permiten consultas de lectura (SELECT / PRAGMA)."}
+            cleaned = query.strip().rstrip(";")
+            if ";" in cleaned:
+                return {"error": "Multi-sentencias no permitidas."}
+
+            upper_q = cleaned.upper()
+            first_token = upper_q.split()[0] if upper_q.split() else ""
+            if first_token not in ("SELECT", "WITH", "PRAGMA"):
+                return {"error": "Solo se permiten consultas de lectura (SELECT / WITH / PRAGMA)."}
+
+            blocked = ("ATTACH", "DETACH", "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "REPLACE")
+            for b in blocked:
+                if f" {b} " in f" {upper_q} ":
+                    return {"error": f"Operación no permitida: {b}"}
 
             try:
-                results = db.query(query)
+                db = DashboardDB()
+                results = db.query(cleaned + ";")
                 return {
                     "total_rows": len(results),
                     "rows": results[:50],  # cap at 50 rows for prompt safety
@@ -114,10 +123,23 @@ class ToolRegistry:
             func=run_vector_search,
         ))
 
-        # 4. Ingestion Pipeline Tool
+        # 4. Ingestion Pipeline Tool (Hardened against Path Traversal)
         def run_ingestion(source_path: str) -> Dict[str, Any]:
+            base_dir = Path(__file__).resolve().parent.parent
+            target = Path(source_path)
+            resolved = target.resolve() if target.is_absolute() else (base_dir / target).resolve()
+
+            # Prevent directory traversal outside the workspace
+            try:
+                resolved.relative_to(base_dir)
+            except ValueError:
+                return {"error": "Acceso denegado: solo se permite ingestar archivos dentro del directorio del proyecto."}
+
+            if not resolved.exists():
+                return {"error": f"Archivo o carpeta no encontrada: {source_path}"}
+
             pipeline = IngestionPipeline(db_path=".vector_store.db")
-            report = pipeline.run(source_path)
+            report = pipeline.run(str(resolved))
             return report.to_dict()
 
         self.register(Tool(

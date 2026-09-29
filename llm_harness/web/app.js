@@ -1,4 +1,15 @@
 document.addEventListener("DOMContentLoaded", () => {
+  // Security sanitizer against DOM-XSS
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   // Navigation Tabs
   const tabBtnLLM = document.getElementById("tabBtnLLM");
   const tabBtnEmbeddings = document.getElementById("tabBtnEmbeddings");
@@ -332,10 +343,10 @@ document.addEventListener("DOMContentLoaded", () => {
         circle.addEventListener("mouseenter", (e) => {
           scatterTooltip.style.display = "block";
           scatterTooltip.innerHTML = `
-            <strong>${pt.cliente}</strong><br/>
-            <span>Categoría: ${pt.categoria}</span><br/>
-            <span>Servicio: ${pt.servicio}</span><br/>
-            <small style="color:#94a3b8">Chunk ID: ${pt.id}</small>
+            <strong>${escapeHtml(pt.cliente)}</strong><br/>
+            <span>Categoría: ${escapeHtml(pt.categoria)}</span><br/>
+            <span>Servicio: ${escapeHtml(pt.servicio)}</span><br/>
+            <small style="color:#94a3b8">Chunk ID: ${escapeHtml(pt.id)}</small>
           `;
           const rect = scatterSvg.getBoundingClientRect();
           scatterTooltip.style.left = `${(cx / 1000) * rect.width + 12}px`;
@@ -1034,11 +1045,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.rows && data.rows.length > 0) {
           const cols = Object.keys(data.rows[0]);
           let tableHtml = `<table class="kpi-data-table"><thead><tr>`;
-          cols.forEach(c => tableHtml += `<th>${c}</th>`);
+          cols.forEach(c => tableHtml += `<th>${escapeHtml(c)}</th>`);
           tableHtml += `</tr></thead><tbody>`;
           data.rows.forEach(r => {
             tableHtml += `<tr>`;
-            cols.forEach(c => tableHtml += `<td>${r[c] !== null && r[c] !== undefined ? r[c] : ""}</td>`);
+            cols.forEach(c => tableHtml += `<td>${r[c] !== null && r[c] !== undefined ? escapeHtml(r[c]) : ""}</td>`);
             tableHtml += `</tr>`;
           });
           tableHtml += `</tbody></table>`;

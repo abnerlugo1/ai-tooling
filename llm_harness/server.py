@@ -122,6 +122,11 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed_url = urllib.parse.urlparse(self.path)
         content_length = int(self.headers.get("Content-Length", 0))
+        MAX_PAYLOAD_BYTES = 2 * 1024 * 1024  # 2MB limit
+        if content_length > MAX_PAYLOAD_BYTES:
+            self._send_json({"error": "Payload demasiado grande (máximo 2MB permitido)."}, status=413)
+            return
+
         post_body = self.rfile.read(content_length)
 
         try:
