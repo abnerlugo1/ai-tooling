@@ -1,5 +1,35 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // Elements
+  // Navigation Tabs
+  const tabBtnLLM = document.getElementById("tabBtnLLM");
+  const tabBtnEmbeddings = document.getElementById("tabBtnEmbeddings");
+  const viewLLM = document.getElementById("viewLLM");
+  const viewEmbeddings = document.getElementById("viewEmbeddings");
+
+  function switchTab(tab) {
+    if (tab === "llm") {
+      tabBtnLLM.classList.add("active");
+      tabBtnEmbeddings.classList.remove("active");
+      viewLLM.style.display = "block";
+      viewEmbeddings.style.display = "none";
+    } else {
+      tabBtnEmbeddings.classList.add("active");
+      tabBtnLLM.classList.remove("active");
+      viewEmbeddings.style.display = "block";
+      viewLLM.style.display = "none";
+      // Auto-trigger cluster rendering and initial vectorization if empty
+      loadClusterMap();
+      if (!document.getElementById("vecActive").textContent || document.getElementById("vecActive").textContent === "--") {
+        generateVector();
+      }
+    }
+  }
+
+  tabBtnLLM?.addEventListener("click", () => switchTab("llm"));
+  tabBtnEmbeddings?.addEventListener("click", () => switchTab("embeddings"));
+
+  // ==========================================
+  // TAB 1: LLM COMPARISON
+  // ==========================================
   const promptInput = document.getElementById("promptInput");
   const temperatureSelect = document.getElementById("temperatureSelect");
   const maxTokensSelect = document.getElementById("maxTokensSelect");
@@ -12,7 +42,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const kpiLatencyDelta = document.getElementById("kpiLatencyDelta");
   const kpiCostDelta = document.getElementById("kpiCostDelta");
 
-  // API Elements
   const apiTotalLatency = document.getElementById("apiTotalLatency");
   const apiTTFT = document.getElementById("apiTTFT");
   const apiThroughput = document.getElementById("apiThroughput");
@@ -21,7 +50,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiResponseText = document.getElementById("apiResponseText");
   const btnCopyApi = document.getElementById("btnCopyApi");
 
-  // Embedded Elements
   const embeddedTotalLatency = document.getElementById("embeddedTotalLatency");
   const embeddedTTFT = document.getElementById("embeddedTTFT");
   const embeddedThroughput = document.getElementById("embeddedThroughput");
@@ -137,12 +165,265 @@ document.addEventListener("DOMContentLoaded", () => {
 
   btnCompare?.addEventListener("click", runBenchmark);
 
+  // ==========================================
+  // TAB 2: EMBEDDINGS & VECTOR EXPLORER
+  // ==========================================
+
+  // 1. Vector Generator
+  const embedInput = document.getElementById("embedInput");
+  const btnGenVector = document.getElementById("btnGenVector");
+  const vecDim = document.getElementById("vecDim");
+  const vecNorm = document.getElementById("vecNorm");
+  const vecActive = document.getElementById("vecActive");
+  const vectorHeatmap = document.getElementById("vectorHeatmap");
+  const slotsContainer = document.getElementById("slotsContainer");
+
+  async function generateVector() {
+    const text = embedInput.value.trim();
+    if (!text) return;
+
+    btnGenVector.disabled = true;
+    try {
+      const res = await fetch("/api/embeddings/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+
+      vecDim.textContent = data.dimension;
+      vecNorm.textContent = data.norm.toFixed(5);
+      vecActive.textContent = `${data.non_zero_dimensions} / ${data.dimension}`;
+
+      // Render Heatmap (showing first 64 sample vector slots)
+      vectorHeatmap.innerHTML = "";
+      const maxVal = Math.max(...data.sample_vector.map(Math.abs)) || 1.0;
+      data.sample_vector.forEach((val, idx) => {
+        const block = document.createElement("div");
+        block.className = "heat-block";
+        const normalized = Math.min(1.0, Math.abs(val) / maxVal);
+
+        if (val > 0) {
+          block.style.backgroundColor = `rgba(16, 185, 129, ${0.15 + normalized * 0.85})`;
+        } else if (val < 0) {
+          block.style.backgroundColor = `rgba(244, 63, 94, ${0.15 + normalized * 0.85})`;
+        } else {
+          block.style.backgroundColor = "rgba(255, 255, 255, 0.05)";
+        }
+        block.title = `Slot #${idx}: ${val.toFixed(4)}`;
+        vectorHeatmap.appendChild(block);
+      });
+
+      // Render top activated slots
+      slotsContainer.innerHTML = "";
+      data.top_activated.slice(0, 10).forEach(slot => {
+        const pill = document.createElement("span");
+        pill.className = "slot-pill";
+        pill.textContent = `Dim #${slot.index}: ${slot.value > 0 ? "+" : ""}${slot.value}`;
+        slotsContainer.appendChild(pill);
+      });
+
+    } catch (e) {
+      console.error(e);
+    } finally {
+      btnGenVector.disabled = false;
+    }
+  }
+
+  btnGenVector?.addEventListener("click", generateVector);
+
+  // 2. Cosine Similarity Calculator
+  const textAInput = document.getElementById("textAInput");
+  const textBInput = document.getElementById("textBInput");
+  const btnCalcSimilarity = document.getElementById("btnCalcSimilarity");
+  const simNumber = document.getElementById("simNumber");
+  const simScoreRaw = document.getElementById("simScoreRaw");
+  const simRating = document.getElementById("simRating");
+  const simResultBox = document.getElementById("simResultBox");
+
+  document.getElementById("pairPreset1")?.addEventListener("click", () => {
+    textAInput.value = "Servicio de grúa para remolque de automóvil averiado";
+    textBInput.value = "Auxilio vial mecánico y asistencia técnica en carretera";
+    calcSimilarity();
+  });
+
+  document.getElementById("pairPreset2")?.addEventListener("click", () => {
+    textAInput.value = "Consulta médica preventiva y paquete de check up general";
+    textBInput.value = "Examen clínico de laboratorio y evaluación de salud";
+    calcSimilarity();
+  });
+
+  document.getElementById("pairPreset3")?.addEventListener("click", () => {
+    textAInput.value = "Reparación de fuga de agua y fontanería en domicilio";
+    textBInput.value = "Inversión bursátil en fondos indexados y criptomonedas";
+    calcSimilarity();
+  });
+
+  async function calcSimilarity() {
+    const textA = textAInput.value.trim();
+    const textB = textBInput.value.trim();
+    if (!textA || !textB) return;
+
+    btnCalcSimilarity.disabled = true;
+    try {
+      const res = await fetch("/api/embeddings/similarity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text_a: textA, text_b: textB }),
+      });
+      const data = await res.json();
+
+      simNumber.textContent = `${data.similarity_percentage.toFixed(1)}%`;
+      simScoreRaw.textContent = `Similitud Coseno: ${data.cosine_similarity.toFixed(4)}`;
+      simRating.textContent = data.rating;
+
+      // Update circle gradient
+      const circle = simResultBox.querySelector(".sim-score-circle");
+      if (circle) {
+        circle.style.setProperty("--sim-pct", data.similarity_percentage);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      btnCalcSimilarity.disabled = false;
+    }
+  }
+
+  btnCalcSimilarity?.addEventListener("click", calcSimilarity);
+
+  // 3. Cluster Scatter Plot
+  const scatterSvg = document.getElementById("scatterSvg");
+  const scatterTooltip = document.getElementById("scatterTooltip");
+  const btnRefreshClusters = document.getElementById("btnRefreshClusters");
+
+  async function loadClusterMap() {
+    try {
+      const res = await fetch("/api/vector/clusters");
+      const data = await res.json();
+
+      // Clean old circles
+      const oldCircles = scatterSvg.querySelectorAll(".scatter-point");
+      oldCircles.forEach(c => c.remove());
+
+      data.points.forEach(pt => {
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        const cx = (pt.x / 100.0) * 1000;
+        const cy = (pt.y / 100.0) * 340;
+
+        circle.setAttribute("cx", cx);
+        circle.setAttribute("cy", cy);
+        circle.setAttribute("r", "5.5");
+        circle.setAttribute("fill", pt.color);
+        circle.setAttribute("opacity", "0.75");
+        circle.setAttribute("class", "scatter-point");
+
+        // Hover event for tooltip
+        circle.addEventListener("mouseenter", (e) => {
+          scatterTooltip.style.display = "block";
+          scatterTooltip.innerHTML = `
+            <strong>${pt.cliente}</strong><br/>
+            <span>Categoría: ${pt.categoria}</span><br/>
+            <span>Servicio: ${pt.servicio}</span><br/>
+            <small style="color:#94a3b8">Chunk ID: ${pt.id}</small>
+          `;
+          const rect = scatterSvg.getBoundingClientRect();
+          scatterTooltip.style.left = `${(cx / 1000) * rect.width + 12}px`;
+          scatterTooltip.style.top = `${(cy / 340) * rect.height - 20}px`;
+        });
+
+        circle.addEventListener("mouseleave", () => {
+          scatterTooltip.style.display = "none";
+        });
+
+        scatterSvg.appendChild(circle);
+      });
+    } catch (e) {
+      console.error("Cluster map load error:", e);
+    }
+  }
+
+  btnRefreshClusters?.addEventListener("click", loadClusterMap);
+
+  // 4. Live Vector Search against .vector_store.db
+  const vectorSearchInput = document.getElementById("vectorSearchInput");
+  const vectorHybridToggle = document.getElementById("vectorHybridToggle");
+  const vectorTopK = document.getElementById("vectorTopK");
+  const btnVectorSearch = document.getElementById("btnVectorSearch");
+  const vectorResultsContainer = document.getElementById("vectorResultsContainer");
+
+  async function runVectorSearch() {
+    const query = vectorSearchInput.value.trim();
+    if (!query) return;
+
+    btnVectorSearch.disabled = true;
+    btnVectorSearch.textContent = "Buscando...";
+    vectorResultsContainer.innerHTML = "<div class='empty-state'>Buscando en la base vectorial...</div>";
+
+    try {
+      const res = await fetch("/api/vector/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query,
+          top_k: parseInt(vectorTopK.value, 10),
+          hybrid: vectorHybridToggle.checked,
+        }),
+      });
+      const data = await res.json();
+
+      if (!data.results || data.results.length === 0) {
+        vectorResultsContainer.innerHTML = "<div class='empty-state'>No se encontraron chunks coincidentes.</div>";
+        return;
+      }
+
+      vectorResultsContainer.innerHTML = "";
+      data.results.forEach(r => {
+        const card = document.createElement("div");
+        card.className = "v-result-card";
+
+        const meta = r.metadata || {};
+        const metaTags = [];
+        if (meta.cliente) metaTags.push(`<span class="v-meta-tag">Cliente: ${meta.cliente}</span>`);
+        if (meta.categoria) metaTags.push(`<span class="v-meta-tag">Cat: ${meta.categoria}</span>`);
+        if (meta.servicio) metaTags.push(`<span class="v-meta-tag">Servicio: ${meta.servicio}</span>`);
+        if (meta.Fecha) metaTags.push(`<span class="v-meta-tag">Fecha: ${meta.Fecha}</span>`);
+        if (meta.is_summary) metaTags.push(`<span class="v-meta-tag" style="color:#06b6d4;">Resumen Analítico</span>`);
+
+        card.innerHTML = `
+          <div class="v-result-header">
+            <span class="v-result-rank">#${r.rank} - Score: ${r.score.toFixed(4)}</span>
+            <span class="v-score-badge">~${r.tokens} tokens</span>
+          </div>
+          <div class="v-result-meta">${metaTags.join(" ")}</div>
+          <pre class="v-result-content">${r.content}</pre>
+        `;
+        vectorResultsContainer.appendChild(card);
+      });
+
+    } catch (e) {
+      console.error(e);
+      vectorResultsContainer.innerHTML = `<div class='empty-state text-amber'>Error: ${e.message}</div>`;
+    } finally {
+      btnVectorSearch.disabled = false;
+      btnVectorSearch.textContent = "Buscar";
+    }
+  }
+
+  btnVectorSearch?.addEventListener("click", runVectorSearch);
+  vectorSearchInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") runVectorSearch();
+  });
+
   // Initial fetch for system stats
   fetch("/api/stats")
     .then(r => r.json())
     .then(stats => {
       const statusText = document.getElementById("statusText");
       if (statusText) statusText.textContent = `Harness Activo (${stats.status})`;
+      const badgeDbCount = document.getElementById("badgeDbCount");
+      if (badgeDbCount && stats.vector_store) {
+        badgeDbCount.textContent = `${stats.vector_store.total_chunks.toLocaleString()} Chunks Activos`;
+      }
     })
     .catch(() => {});
 });

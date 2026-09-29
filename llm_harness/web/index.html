@@ -47,8 +47,28 @@
       </div>
     </header>
 
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs" role="tablist">
+      <button type="button" class="tab-btn active" id="tabBtnLLM" role="tab" aria-selected="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        <span>Arnés de Modelos LLM (API vs Integrado)</span>
+      </button>
+
+      <button type="button" class="tab-btn" id="tabBtnEmbeddings" role="tab" aria-selected="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span>Explorador Visual de Embeddings & Vector Store</span>
+      </button>
+    </nav>
+
     <!-- Main Workspace -->
     <main class="main-content">
+      <!-- VIEW 1: LLM Architecture Harness -->
+      <div id="viewLLM">
       <!-- Input Panel & Configuration -->
       <section class="control-panel glass-card">
         <div class="panel-header">
@@ -274,6 +294,172 @@
           </table>
         </div>
       </section>
+      </div><!-- End viewLLM -->
+
+      <!-- VIEW 2: Embeddings & Vector Store Visual Explorer -->
+      <div id="viewEmbeddings" style="display: none;">
+        <!-- Banner Intro -->
+        <section class="control-panel glass-card">
+          <div class="panel-header">
+            <h2>Explorador Visual de Embeddings y Representación Vectorial</h2>
+            <span class="badge badge-info">Modelo Denso: LocalDenseEmbedder (384-dim)</span>
+          </div>
+          <p class="section-desc">
+            Los embeddings proyectan texto en un espacio geométrico de alta dimensión donde la distancia angular (similitud coseno)
+            refleja afinidad semántica. Explora aquí la generación en tiempo real, compara textos y visualiza los clusters del dataset <strong>dashboard .xlsx</strong>.
+          </p>
+        </section>
+
+        <!-- Two Columns: Vector Inspector & Similarity Calculator -->
+        <div class="embeddings-two-col">
+          <!-- Col 1: Real-time Vector Inspector -->
+          <section class="glass-card panel-embed">
+            <div class="panel-header">
+              <h3>🧬 Inspector de Embeddings</h3>
+              <span class="badge badge-primary">384 Dimensiones L2</span>
+            </div>
+            <div class="input-group">
+              <label for="embedInput">Texto a Vectorizar:</label>
+              <div class="input-with-btn">
+                <input type="text" id="embedInput" class="form-input" value="Servicio de grúa para asistencia vial en carretera" />
+                <button type="button" class="btn-primary btn-sm" id="btnGenVector">Vectorizar</button>
+              </div>
+            </div>
+
+            <!-- Vector Stats Grid -->
+            <div class="vector-stats-row">
+              <div class="v-stat">
+                <span class="v-stat-label">Dimensión</span>
+                <span class="v-stat-val" id="vecDim">384</span>
+              </div>
+              <div class="v-stat">
+                <span class="v-stat-label">Norma L2</span>
+                <span class="v-stat-val text-emerald" id="vecNorm">1.00000</span>
+              </div>
+              <div class="v-stat">
+                <span class="v-stat-label">Dims Activas</span>
+                <span class="v-stat-val text-cyan" id="vecActive">--</span>
+              </div>
+            </div>
+
+            <!-- Vector Visual Bar (Heatmap / Sparkline) -->
+            <div class="vector-bar-wrap">
+              <span class="v-stat-label">Mapa de Calor Vectorial (Muestra 64 slots):</span>
+              <div class="vector-heatmap" id="vectorHeatmap">
+                <!-- Dynamically generated heat blocks -->
+              </div>
+            </div>
+
+            <!-- Top Activated Features -->
+            <div class="top-activated-wrap">
+              <span class="v-stat-label">Slots con Mayor Activación:</span>
+              <div class="slots-pill-container" id="slotsContainer">
+                <span class="text-dim">Haz clic en 'Vectorizar' para calcular...</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Col 2: Semantic Similarity Calculator -->
+          <section class="glass-card panel-embed">
+            <div class="panel-header">
+              <h3>📐 Calculadora de Similitud Coseno</h3>
+              <span class="badge badge-success">Métrica Coseno</span>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="preset-bar-sm">
+              <span class="preset-label">Comparar:</span>
+              <button type="button" class="preset-btn-sm" id="pairPreset1">Grúa vs Asistencia Vial</button>
+              <button type="button" class="preset-btn-sm" id="pairPreset2">Check up vs Examen Médico</button>
+              <button type="button" class="preset-btn-sm" id="pairPreset3">Plomero vs Criptomonedas</button>
+            </div>
+
+            <div class="input-group">
+              <label for="textAInput">Texto A:</label>
+              <input type="text" id="textAInput" class="form-input" value="Servicio de grúa para remolque de automóvil averiado" />
+            </div>
+
+            <div class="input-group">
+              <label for="textBInput">Texto B:</label>
+              <input type="text" id="textBInput" class="form-input" value="Auxilio vial mecánico y asistencia técnica en carretera" />
+            </div>
+
+            <button type="button" class="btn-primary btn-full" id="btnCalcSimilarity">Calcular Similitud Semántica</button>
+
+            <!-- Similarity Result Box -->
+            <div class="sim-result-box" id="simResultBox">
+              <div class="sim-score-circle">
+                <span class="sim-number" id="simNumber">--%</span>
+                <span class="sim-sub">Similitud</span>
+              </div>
+              <div class="sim-details">
+                <span class="sim-score-raw" id="simScoreRaw">Coseno: --</span>
+                <p class="sim-rating" id="simRating">Presiona 'Calcular' para evaluar</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- 2D Projection Map of Dashboard .xlsx Clusters -->
+        <section class="glass-card cluster-section">
+          <div class="panel-header">
+            <div>
+              <h3>🗺️ Mapa de Proyección 2D de Clusters Semánticos (dashboard .xlsx)</h3>
+              <p class="panel-subtitle">Visualización bidimensional del espacio latente proyectado de los registros de clientes y servicios.</p>
+            </div>
+            <button type="button" class="btn-secondary btn-sm" id="btnRefreshClusters">Recargar Mapa</button>
+          </div>
+
+          <!-- Category Legend -->
+          <div class="cluster-legend">
+            <span class="legend-item"><span class="legend-dot" style="background:#06b6d4;"></span> Asistencia vial (Grúa/Corriente)</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#10b981;"></span> Check up (Médico)</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#a855f7;"></span> Membresía dental (Limpieza)</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#f59e0b;"></span> Asistencia hogar (Plomero)</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#ec4899;"></span> Plan salud (Consultas)</span>
+          </div>
+
+          <!-- Scatter Canvas / SVG Container -->
+          <div class="scatter-container" id="scatterContainer">
+            <svg id="scatterSvg" width="100%" height="340" viewBox="0 0 1000 340">
+              <!-- Grid lines -->
+              <line x1="50" y1="170" x2="950" y2="170" stroke="rgba(255,255,255,0.06)" stroke-dasharray="4"/>
+              <line x1="500" y1="30" x2="500" y2="310" stroke="rgba(255,255,255,0.06)" stroke-dasharray="4"/>
+              <!-- Data circles dynamically injected -->
+            </svg>
+            <div class="scatter-tooltip" id="scatterTooltip"></div>
+          </div>
+        </section>
+
+        <!-- Live Vector Search against .vector_store.db -->
+        <section class="glass-card search-vector-section">
+          <div class="panel-header">
+            <div>
+              <h3>🔎 Búsqueda Semántica Vectorial en Vivo</h3>
+              <p class="panel-subtitle">Consulta directa sobre la base de datos vectorial de SQLite (3,001 chunks indexados).</p>
+            </div>
+            <span class="badge badge-info" id="badgeDbCount">3,001 Chunks Activos</span>
+          </div>
+
+          <div class="search-bar-row">
+            <input type="text" id="vectorSearchInput" class="form-input search-input" placeholder="Buscar registros por significado (ej. 'plomero en el hogar', 'servicios para adultos mayores', 'limpieza dental')..." value="asistencia de grua y auxilio vial" />
+            <div class="search-options">
+              <label><input type="checkbox" id="vectorHybridToggle" checked /> Híbrido (BM25 + Coseno)</label>
+              <select id="vectorTopK" class="form-select">
+                <option value="3" selected>Top 3</option>
+                <option value="5">Top 5</option>
+                <option value="10">Top 10</option>
+              </select>
+              <button type="button" class="btn-primary" id="btnVectorSearch">Buscar</button>
+            </div>
+          </div>
+
+          <!-- Search Results Container -->
+          <div class="vector-results-container" id="vectorResultsContainer">
+            <div class="empty-state">Ingresa una consulta para buscar chunks relevantes en el Vector Store.</div>
+          </div>
+        </section>
+      </div><!-- End viewEmbeddings -->
     </main>
 
     <footer class="app-footer">

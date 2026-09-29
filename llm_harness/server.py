@@ -56,6 +56,54 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(stats_data)
             return
 
+        if parsed_url.path == "/api/vector/clusters":
+            store = VectorStore(db_path=".vector_store.db")
+            # Sample up to 120 points for 2D visualization
+            points = []
+            category_color_map = {
+                "Asistencia vial": "#06b6d4",       # Cyan
+                "Check up": "#10b981",              # Emerald
+                "Membresia dental": "#a855f7",      # Purple
+                "Asistencia en el hogar": "#f59e0b",# Amber
+                "Plan salud": "#ec4899",            # Pink
+            }
+
+            import math
+            import hashlib
+
+            for i, chunk in enumerate(store.chunks[:120]):
+                cat = chunk.metadata.get("categoria", "Otros")
+                srv = chunk.metadata.get("servicio", "General")
+                cliente = chunk.metadata.get("cliente", f"Doc #{i}")
+                color = category_color_map.get(cat, "#64748b")
+
+                # Pseudo-PCA projection from 384-dim embedding to 2D canvas coordinates (0-100%)
+                if chunk.embedding:
+                    # Project first components
+                    x_raw = sum(chunk.embedding[j] * math.cos(j * 0.1) for j in range(min(60, len(chunk.embedding))))
+                    y_raw = sum(chunk.embedding[j] * math.sin(j * 0.1) for j in range(min(60, len(chunk.embedding))))
+                    # Normalize to 10% - 90% bounds
+                    x = max(8.0, min(92.0, 50.0 + x_raw * 18.0))
+                    y = max(8.0, min(92.0, 50.0 + y_raw * 18.0))
+                else:
+                    h = int(hashlib.md5(chunk.content.encode("utf-8")).hexdigest(), 16)
+                    x = 10.0 + (h % 80)
+                    y = 10.0 + ((h >> 8) % 80)
+
+                points.append({
+                    "id": chunk.chunk_id,
+                    "cliente": cliente,
+                    "categoria": cat,
+                    "servicio": srv,
+                    "x": round(x, 2),
+                    "y": round(y, 2),
+                    "color": color,
+                    "tokens": chunk.token_count,
+                })
+
+            self._send_json({"points": points, "total_chunks": len(store.chunks)})
+            return
+
         # Serve static assets
         super().do_GET()
 
@@ -70,6 +118,92 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": "Invalid JSON payload"}, status=400)
             return
 
+        # 1. Embeddings generate endpoint
+        if parsed_url.path == "/api/embeddings/generate":
+            text = body.get("text", "").strip()
+            if not text:
+                self._send_json({"error": "El campo 'text' es obligatorio"}, status=400)
+                return
+
+            from ingestion.embeddings import LocalDenseEmbedder
+            embedder = LocalDenseEmbedder(dimension=384)
+            vec = embedder.embed_text(text)
+            norm = sum(v * v for v in vec) ** 0.5
+            non_zero = sum(1 for v in vec if abs(v) > 1e-6)
+
+            # Sort top 15 activated dimensions
+            indexed = [{"index": idx, "value": round(val, 4)} for idx, val in enumerate(vec) if abs(val) > 1e-4]
+            indexed.sort(key=lambda x: abs(x["value"]), reverse=True)
+
+            self._send_json({
+                "text": text,
+                "dimension": len(vec),
+                "norm": round(norm, 5),
+                "non_zero_dimensions": non_zero,
+                "sample_vector": [round(v, 4) for v in vec[:32]],
+                "top_activated": indexed[:15],
+            })
+            return
+
+        # 2. Semantic similarity calculation
+        if parsed_url.path == "/api/embeddings/similarity":
+            text_a = body.get("text_a", "").strip()
+            text_b = body.get("text_b", "").strip()
+
+            from ingestion.embeddings import LocalDenseEmbedder, cosine_similarity
+            embedder = LocalDenseEmbedder(dimension=384)
+            vec_a = embedder.embed_text(text_a)
+            vec_b = embedder.embed_text(text_b)
+            score = cosine_similarity(vec_a, vec_b)
+            pct = max(0.0, min(100.0, (score + 1.0) / 2.0 * 100.0))
+
+            if score > 0.7:
+                rating = "Muy Alta Similitud Semántica"
+            elif score > 0.4:
+                rating = "Similitud Moderada / Coincidencia de Contexto"
+            elif score > 0.15:
+                rating = "Baja Similitud / Relación Leve"
+            else:
+                rating = "Sin Relación Semántica (Ortogonales o Distantes)"
+
+            self._send_json({
+                "text_a": text_a,
+                "text_b": text_b,
+                "cosine_similarity": round(score, 4),
+                "similarity_percentage": round(pct, 1),
+                "rating": rating,
+            })
+            return
+
+        # 3. Direct Vector Search
+        if parsed_url.path == "/api/vector/search":
+            query = body.get("query", "").strip()
+            top_k = int(body.get("top_k", 5))
+            hybrid = bool(body.get("hybrid", True))
+            alpha = float(body.get("alpha", 0.7))
+
+            store = VectorStore(db_path=".vector_store.db")
+            results = store.search(query=query, top_k=top_k, hybrid=hybrid, alpha=alpha)
+
+            serialized_results = []
+            for r in results:
+                serialized_results.append({
+                    "rank": r.rank,
+                    "score": round(r.score, 4),
+                    "chunk_id": r.chunk.chunk_id,
+                    "content": r.chunk.content,
+                    "tokens": r.chunk.token_count,
+                    "metadata": r.chunk.metadata,
+                })
+
+            self._send_json({
+                "query": query,
+                "results": serialized_results,
+                "total_found": len(serialized_results),
+            })
+            return
+
+        # 4. LLM Compare endpoint
         if parsed_url.path == "/api/compare":
             prompt = body.get("prompt", "Explica la diferencia entre arquitecturas de LLM basadas en API y modelos integrados.")
             max_tokens = int(body.get("max_tokens", 512))
