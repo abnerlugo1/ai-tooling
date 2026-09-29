@@ -919,4 +919,154 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   }
+
+  // ==========================================
+  // KPI DATABASE PROMPT (Q&A con OpenAI sobre dashboard.db)
+  // ==========================================
+  const kpiPromptInput = document.getElementById("kpiPromptInput");
+  const btnSubmitKpiPrompt = document.getElementById("btnSubmitKpiPrompt");
+  const kpiPromptResultArea = document.getElementById("kpiPromptResultArea");
+  const kpiPromptGuardAlert = document.getElementById("kpiPromptGuardAlert");
+  const kpiPromptGuardText = document.getElementById("kpiPromptGuardText");
+  const kpiPromptResponseContent = document.getElementById("kpiPromptResponseContent");
+  const kpiPromptModelBadge = document.getElementById("kpiPromptModelBadge");
+  const kpiPromptLatency = document.getElementById("kpiPromptLatency");
+  const kpiPromptRowCount = document.getElementById("kpiPromptRowCount");
+  const kpiPromptAnswerText = document.getElementById("kpiPromptAnswerText");
+  const kpiPromptSqlCode = document.getElementById("kpiPromptSqlCode");
+  const kpiPromptTableWrapper = document.getElementById("kpiPromptTableWrapper");
+  const btnCopyPromptAnswer = document.getElementById("btnCopyPromptAnswer");
+
+  const tabKpiDetailsTable = document.getElementById("tabKpiDetailsTable");
+  const tabKpiDetailsSql = document.getElementById("tabKpiDetailsSql");
+  const kpiDetailsTableView = document.getElementById("kpiDetailsTableView");
+  const kpiDetailsSqlView = document.getElementById("kpiDetailsSqlView");
+
+  // Presets
+  document.getElementById("kpiPromptPreset1")?.addEventListener("click", () => {
+    if (kpiPromptInput) kpiPromptInput.value = "¿Cuál es la edad promedio de los clientes desglosada por cada categoría de servicio?";
+  });
+  document.getElementById("kpiPromptPreset2")?.addEventListener("click", () => {
+    if (kpiPromptInput) kpiPromptInput.value = "¿Cuáles son los 5 servicios más solicitados en total y cuántas solicitudes tiene cada uno?";
+  });
+  document.getElementById("kpiPromptPreset3")?.addEventListener("click", () => {
+    if (kpiPromptInput) kpiPromptInput.value = "¿Cuál es el porcentaje y cantidad total de clientes por género en la base de datos?";
+  });
+  document.getElementById("kpiPromptPreset4")?.addEventListener("click", () => {
+    if (kpiPromptInput) kpiPromptInput.value = "¿Cuántas solicitudes de Asistencia vial se han realizado por cada mes registrado?";
+  });
+
+  // Toggle between Table and SQL code
+  tabKpiDetailsTable?.addEventListener("click", () => {
+    tabKpiDetailsTable.classList.add("active");
+    tabKpiDetailsSql?.classList.remove("active");
+    if (kpiDetailsTableView) kpiDetailsTableView.style.display = "block";
+    if (kpiDetailsSqlView) kpiDetailsSqlView.style.display = "none";
+  });
+
+  tabKpiDetailsSql?.addEventListener("click", () => {
+    tabKpiDetailsSql.classList.add("active");
+    tabKpiDetailsTable?.classList.remove("active");
+    if (kpiDetailsTableView) kpiDetailsTableView.style.display = "none";
+    if (kpiDetailsSqlView) kpiDetailsSqlView.style.display = "block";
+  });
+
+  btnCopyPromptAnswer?.addEventListener("click", () => {
+    if (kpiPromptAnswerText) {
+      navigator.clipboard.writeText(kpiPromptAnswerText.textContent);
+      btnCopyPromptAnswer.textContent = "¡Copiado!";
+      setTimeout(() => { btnCopyPromptAnswer.textContent = "Copiar Respuesta"; }, 1500);
+    }
+  });
+
+  async function executeKpiPromptQuery() {
+    const query = kpiPromptInput?.value.trim();
+    if (!query) return;
+
+    btnSubmitKpiPrompt.disabled = true;
+    btnSubmitKpiPrompt.innerHTML = `
+      <svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+        <path d="M12 2a10 10 0 0 1 10 10" />
+      </svg>
+      <span>Consultando con OpenAI...</span>
+    `;
+
+    if (kpiPromptResultArea) kpiPromptResultArea.style.display = "block";
+    if (kpiPromptGuardAlert) kpiPromptGuardAlert.style.display = "none";
+    if (kpiPromptResponseContent) kpiPromptResponseContent.style.display = "block";
+    if (kpiPromptAnswerText) kpiPromptAnswerText.textContent = "Generando consulta SQL y analizando con OpenAI gpt-6-luna...";
+    if (kpiPromptSqlCode) kpiPromptSqlCode.textContent = "Generando sentencia SQL...";
+    if (kpiPromptTableWrapper) kpiPromptTableWrapper.innerHTML = "<div class='empty-state'>Extrayendo registros desde SQLite...</div>";
+
+    try {
+      const resp = await fetch("/api/kpi/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+
+      if (!resp.ok) throw new Error(`HTTP Error ${resp.status}`);
+      const data = await resp.json();
+
+      if (kpiPromptLatency) kpiPromptLatency.textContent = `Latencia: ${data.latency_ms} ms`;
+      if (kpiPromptRowCount) kpiPromptRowCount.textContent = `Filas: ${data.total_rows || 0}`;
+      if (kpiPromptModelBadge && data.model_name) kpiPromptModelBadge.textContent = `OpenAI ${data.model_name}`;
+
+      // Handle guardrail out-of-scope response
+      if (data.is_kpi_query === false) {
+        if (kpiPromptGuardAlert) {
+          kpiPromptGuardAlert.style.display = "flex";
+          if (kpiPromptGuardText) kpiPromptGuardText.innerHTML = data.analysis.replace(/\n/g, "<br>");
+        }
+        if (kpiPromptResponseContent) kpiPromptResponseContent.style.display = "none";
+        return;
+      }
+
+      // Valid response
+      if (kpiPromptGuardAlert) kpiPromptGuardAlert.style.display = "none";
+      if (kpiPromptResponseContent) kpiPromptResponseContent.style.display = "block";
+      if (kpiPromptAnswerText) kpiPromptAnswerText.textContent = data.analysis;
+      if (kpiPromptSqlCode) kpiPromptSqlCode.textContent = data.sql || "--";
+
+      // Render Data Table
+      if (kpiPromptTableWrapper) {
+        if (data.rows && data.rows.length > 0) {
+          const cols = Object.keys(data.rows[0]);
+          let tableHtml = `<table class="kpi-data-table"><thead><tr>`;
+          cols.forEach(c => tableHtml += `<th>${c}</th>`);
+          tableHtml += `</tr></thead><tbody>`;
+          data.rows.forEach(r => {
+            tableHtml += `<tr>`;
+            cols.forEach(c => tableHtml += `<td>${r[c] !== null && r[c] !== undefined ? r[c] : ""}</td>`);
+            tableHtml += `</tr>`;
+          });
+          tableHtml += `</tbody></table>`;
+          kpiPromptTableWrapper.innerHTML = tableHtml;
+        } else {
+          kpiPromptTableWrapper.innerHTML = "<div class='empty-state'>Sin filas devueltas para los criterios especificados.</div>";
+        }
+      }
+
+    } catch (err) {
+      console.error(err);
+      if (kpiPromptAnswerText) kpiPromptAnswerText.textContent = `Error al consultar base de datos: ${err.message}`;
+    } finally {
+      btnSubmitKpiPrompt.disabled = false;
+      btnSubmitKpiPrompt.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+        <span>Preguntar a OpenAI</span>
+      `;
+    }
+  }
+
+  btnSubmitKpiPrompt?.addEventListener("click", executeKpiPromptQuery);
+  kpiPromptInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      executeKpiPromptQuery();
+    }
+  });
 });

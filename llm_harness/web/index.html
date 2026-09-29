@@ -683,6 +683,85 @@
             </div>
           </div>
         </section>
+        
+        <!-- Interactive Natural Language OpenAI Prompt for dashboard.db -->
+        <section class="glass-card kpi-prompt-section">
+          <div class="panel-header">
+            <div>
+              <div class="kpi-prompt-title-wrap">
+                <span class="sparkle-icon">💬</span>
+                <h3>Consultar a OpenAI sobre la Base de Datos (dashboard.db)</h3>
+              </div>
+              <p class="panel-subtitle">
+                Formula preguntas analíticas en lenguaje natural. OpenAI generará la consulta SQL exacta sobre los 2,999 registros, ejecutará la extracción en SQLite y sintetizará la respuesta ejecutiva.
+              </p>
+            </div>
+            <span class="badge badge-primary">OpenAI gpt-6-luna</span>
+          </div>
+
+          <!-- Quick Presets -->
+          <div class="preset-bar">
+            <span class="preset-label">Preguntas Rápidas:</span>
+            <button type="button" class="preset-btn" id="kpiPromptPreset1">Promedio de edad por categoría</button>
+            <button type="button" class="preset-btn" id="kpiPromptPreset2">Top 5 servicios más solicitados</button>
+            <button type="button" class="preset-btn" id="kpiPromptPreset3">Distribución de clientes por género</button>
+            <button type="button" class="preset-btn" id="kpiPromptPreset4">Volumen de Asistencia vial por mes</button>
+          </div>
+
+          <!-- Prompt Input Form -->
+          <div class="kpi-prompt-input-box">
+            <textarea id="kpiPromptInput" class="kpi-prompt-textarea" rows="2"
+                      placeholder="Escribe tu pregunta sobre la base de datos... Ej: ¿Cuál es el servicio más solicitado y qué promedio de edad tienen los clientes?"></textarea>
+            <button type="button" class="kpi-prompt-submit-btn" id="btnSubmitKpiPrompt">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              <span>Preguntar a OpenAI</span>
+            </button>
+          </div>
+
+          <!-- Result Area -->
+          <div id="kpiPromptResultArea" style="display: none; margin-top: 20px;">
+            <!-- Guardrail alert for out of scope -->
+            <div id="kpiPromptGuardAlert" class="alert-box alert-warning" style="display: none; margin-bottom: 16px;">
+              <span class="alert-icon">⚠️</span>
+              <div id="kpiPromptGuardText"></div>
+            </div>
+
+            <!-- Response Container -->
+            <div id="kpiPromptResponseContent" class="kpi-prompt-response-card">
+              <div class="kpi-prompt-response-header">
+                <div class="kpi-prompt-meta">
+                  <span class="badge badge-success" id="kpiPromptModelBadge">OpenAI gpt-6-luna</span>
+                  <span class="kpi-prompt-stat" id="kpiPromptLatency">Latencia: -- ms</span>
+                  <span class="kpi-prompt-stat" id="kpiPromptRowCount">Filas: --</span>
+                </div>
+                <button type="button" class="btn-copy" id="btnCopyPromptAnswer">Copiar Respuesta</button>
+              </div>
+
+              <!-- AI Synthesized Answer -->
+              <div class="kpi-prompt-answer" id="kpiPromptAnswerText">
+                --
+              </div>
+
+              <!-- Collapsible Data & SQL Details -->
+              <div class="kpi-prompt-details-toggle">
+                <button type="button" class="kpi-details-tab active" id="tabKpiDetailsTable">📋 Tabla de Datos Extraídos</button>
+                <button type="button" class="kpi-details-tab" id="tabKpiDetailsSql">🔍 Sentencia SQL SQLite</button>
+              </div>
+
+              <div id="kpiDetailsTableView" class="kpi-details-panel">
+                <div class="table-wrapper" id="kpiPromptTableWrapper">
+                  <!-- Dynamic table rendered here -->
+                </div>
+              </div>
+
+              <div id="kpiDetailsSqlView" class="kpi-details-panel" style="display: none;">
+                <pre class="kpi-sql-code" id="kpiPromptSqlCode">--</pre>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <!-- Executive Strategic Analysis with OpenAI based on the Charts -->
         <section class="glass-card kpi-ai-insights-section">
