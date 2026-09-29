@@ -437,6 +437,293 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ==========================================
+  // DYNAMIC AGENT RESPONSE CHART ENGINE (PURE SVG/DOM)
+  // ==========================================
+  function detectColumns(rows) {
+    if (!rows || !Array.isArray(rows) || rows.length === 0) return null;
+    const sample = rows[0];
+    const keys = Object.keys(sample);
+    if (keys.length === 0) return null;
+
+    let labelKey = null;
+    let valKey = null;
+    let secondaryValKey = null;
+
+    // Numeric candidates priority
+    const numericPriority = ["total", "cantidad", "solicitudes", "count", "conteo", "promedio", "promedio_edad", "avg_age", "avg", "porcentaje", "pct", "suma"];
+    for (const prio of numericPriority) {
+      const found = keys.find(k => k.toLowerCase() === prio || k.toLowerCase().includes(prio));
+      if (found && !isNaN(parseFloat(sample[found]))) {
+        valKey = found;
+        break;
+      }
+    }
+
+    if (!valKey) {
+      for (const k of keys) {
+        if (!isNaN(parseFloat(sample[k])) && typeof sample[k] !== "boolean") {
+          valKey = k;
+          break;
+        }
+      }
+    }
+
+    for (const k of keys) {
+      if (k !== valKey && !isNaN(parseFloat(sample[k])) && typeof sample[k] !== "boolean") {
+        secondaryValKey = k;
+        break;
+      }
+    }
+
+    // Label candidates priority
+    const labelPriority = ["servicio", "categoria", "genero", "mes", "fecha", "cliente", "name", "nombre", "tipo", "descripcion"];
+    for (const prio of labelPriority) {
+      const found = keys.find(k => k.toLowerCase() === prio || k.toLowerCase().includes(prio));
+      if (found) {
+        labelKey = found;
+        break;
+      }
+    }
+
+    if (!labelKey) {
+      for (const k of keys) {
+        if (k !== valKey && k !== secondaryValKey) {
+          labelKey = k;
+          break;
+        }
+      }
+    }
+
+    if (!labelKey && keys.length > 0) labelKey = keys[0];
+
+    return { labelKey, valKey, secondaryValKey };
+  }
+
+  function renderAgentResponseChart(rows, container, chartTitle = "Gráfico Analítico del Agente") {
+    if (!container) return;
+    container.innerHTML = "";
+
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      container.innerHTML = `
+        <div class="agent-chart-empty">
+          <span>ℹ️ Sin datos numéricos para graficar. Consulta la pestaña <strong>📋 Tabla de Datos</strong>.</span>
+        </div>
+      `;
+      return;
+    }
+
+    const detected = detectColumns(rows);
+    if (!detected || !detected.valKey) {
+      container.innerHTML = `
+        <div class="agent-chart-empty">
+          <span>ℹ️ Los datos obtenidos (${rows.length} filas) son textuales. Consulta la pestaña <strong>📋 Tabla de Datos</strong> para visualizarlos en detalle.</span>
+        </div>
+      `;
+      return;
+    }
+
+    const { labelKey, valKey, secondaryValKey } = detected;
+    const isTimeline = labelKey && (labelKey.toLowerCase().includes("mes") || labelKey.toLowerCase().includes("fecha") || /^\d{4}-\d{2}/.test(String(rows[0][labelKey])));
+    const isDonut = rows.length === 2 && (rows[0][labelKey] && /^(F|M|Femenino|Masculino|Mujer|Hombre|Si|No)$/i.test(String(rows[0][labelKey]).trim()));
+
+    // Total and Max for proportional calculations
+    const numericVals = rows.map(r => parseFloat(r[valKey]) || 0);
+    const totalSum = numericVals.reduce((a, b) => a + b, 0);
+    const maxVal = Math.max(...numericVals, 0.0001);
+
+    // Build Header
+    const headerHtml = `
+      <div class="agent-chart-header">
+        <div class="agent-chart-title">
+          <span>📊 ${escapeHtml(chartTitle)}</span>
+        </div>
+        <div class="agent-chart-badges">
+          <span class="agent-chart-pill agent-chart-pill-cyan">Métrica: ${escapeHtml(valKey)}</span>
+          <span class="agent-chart-pill">${rows.length} registros</span>
+        </div>
+      </div>
+    `;
+
+    // CASE 1: Single Scalar Metric Card
+    if (rows.length === 1 && !isTimeline) {
+      const row = rows[0];
+      const val = parseFloat(row[valKey]) || 0;
+      const formattedVal = Number.isInteger(val) ? val.toLocaleString() : val.toFixed(2);
+      const labelText = row[labelKey] ? `${escapeHtml(row[labelKey])} (${escapeHtml(valKey)})` : escapeHtml(valKey);
+
+      container.innerHTML = `
+        ${headerHtml}
+        <div class="agent-scalar-card">
+          <div class="agent-scalar-icon">📈</div>
+          <div class="agent-scalar-data">
+            <span class="agent-scalar-val">${formattedVal}</span>
+            <span class="agent-scalar-label">${labelText}</span>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // CASE 2: Donut Chart (e.g. 2 slices like Genero F/M)
+    if (isDonut || (rows.length === 2 && totalSum > 0)) {
+      const slice1 = rows[0];
+      const slice2 = rows[1];
+      const val1 = parseFloat(slice1[valKey]) || 0;
+      const val2 = parseFloat(slice2[valKey]) || 0;
+      const pct1 = ((val1 / totalSum) * 100).toFixed(1);
+      const pct2 = ((val2 / totalSum) * 100).toFixed(1);
+
+      // SVG Donut calculation: circumference = 2 * PI * 60 = ~377
+      const r = 60;
+      const c = 2 * Math.PI * r;
+      const stroke1 = (val1 / totalSum) * c;
+      const stroke2 = (val2 / totalSum) * c;
+
+      container.innerHTML = `
+        ${headerHtml}
+        <div class="agent-donut-layout">
+          <div class="agent-donut-svg-wrap">
+            <svg width="170" height="170" viewBox="0 0 170 170">
+              <circle cx="85" cy="85" r="${r}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="16" />
+              <!-- Slice 1 (Pink) -->
+              <circle cx="85" cy="85" r="${r}" fill="none" stroke="#ec4899" stroke-width="16"
+                stroke-dasharray="${stroke1.toFixed(1)} ${c.toFixed(1)}"
+                stroke-dashoffset="0"
+                transform="rotate(-90 85 85)"
+                style="filter: drop-shadow(0 0 8px rgba(236,72,153,0.5)); transition: stroke-dasharray 1s ease;" />
+              <!-- Slice 2 (Cyan) -->
+              <circle cx="85" cy="85" r="${r}" fill="none" stroke="#06b6d4" stroke-width="16"
+                stroke-dasharray="${stroke2.toFixed(1)} ${c.toFixed(1)}"
+                stroke-dashoffset="${(-stroke1).toFixed(1)}"
+                transform="rotate(-90 85 85)"
+                style="filter: drop-shadow(0 0 8px rgba(6,182,212,0.5)); transition: stroke-dasharray 1s ease;" />
+            </svg>
+            <div class="agent-donut-center">
+              <div class="agent-donut-center-val">${totalSum.toLocaleString()}</div>
+              <div class="agent-donut-center-sub">Total</div>
+            </div>
+          </div>
+          <div class="agent-donut-legend">
+            <div class="agent-donut-legend-item">
+              <span class="agent-donut-dot" style="background:#ec4899; box-shadow:0 0 8px #ec4899;"></span>
+              <strong>${escapeHtml(String(slice1[labelKey]))}:</strong>
+              <span>${val1.toLocaleString()} (${pct1}%)</span>
+            </div>
+            <div class="agent-donut-legend-item">
+              <span class="agent-donut-dot" style="background:#06b6d4; box-shadow:0 0 8px #06b6d4;"></span>
+              <strong>${escapeHtml(String(slice2[labelKey]))}:</strong>
+              <span>${val2.toLocaleString()} (${pct2}%)</span>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // CASE 3: Timeline Vertical Column Chart (Monthly/Timeline)
+    if (isTimeline && rows.length >= 3) {
+      const svgWidth = Math.max(500, rows.length * 60);
+      const svgHeight = 200;
+      const chartTop = 20;
+      const chartBottom = 160;
+      const chartHeight = chartBottom - chartTop;
+      const barWidth = Math.min(36, Math.floor((svgWidth - 60) / rows.length) - 10);
+      const stepX = (svgWidth - 60) / rows.length;
+
+      let colsSvg = "";
+      rows.forEach((r, idx) => {
+        const val = parseFloat(r[valKey]) || 0;
+        const barH = (val / maxVal) * chartHeight;
+        const x = 40 + idx * stepX + (stepX - barWidth) / 2;
+        const y = chartBottom - barH;
+        const label = String(r[labelKey] || "").replace(/^\d{4}-/, "");
+
+        colsSvg += `
+          <g class="timeline-bar-group">
+            <rect x="${x}" y="${y}" width="${barWidth}" height="${barH}" rx="4"
+              fill="url(#agentTimelineGrad)" style="filter: drop-shadow(0 0 6px rgba(6,182,212,0.4));">
+              <title>${escapeHtml(String(r[labelKey]))}: ${val.toLocaleString()}</title>
+            </rect>
+            <text x="${x + barWidth / 2}" y="${y - 6}" text-anchor="middle" fill="#22d3ee" font-size="10" font-family="'Outfit', sans-serif" font-weight="700">${val.toLocaleString()}</text>
+            <text x="${x + barWidth / 2}" y="${chartBottom + 16}" text-anchor="middle" fill="#94a3b8" font-size="11">${escapeHtml(label)}</text>
+          </g>
+        `;
+      });
+
+      container.innerHTML = `
+        ${headerHtml}
+        <div class="agent-timeline-chart-wrap">
+          <svg class="agent-timeline-svg" viewBox="0 0 ${svgWidth} ${svgHeight}">
+            <defs>
+              <linearGradient id="agentTimelineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#22d3ee" />
+                <stop offset="100%" stop-color="#6366f1" />
+              </linearGradient>
+            </defs>
+            <line x1="30" y1="${chartBottom}" x2="${svgWidth - 10}" y2="${chartBottom}" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <line x1="30" y1="${chartTop}" x2="${svgWidth - 10}" y2="${chartTop}" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4" />
+            ${colsSvg}
+          </svg>
+        </div>
+      `;
+      return;
+    }
+
+    // CASE 4: Horizontal Proportional Bars (Categorical / Ranking / Multi-item)
+    let barsHtml = `<div class="agent-chart-bars">`;
+    rows.forEach((r, idx) => {
+      const val = parseFloat(r[valKey]) || 0;
+      const pct = ((val / maxVal) * 100).toFixed(1);
+      const displayVal = Number.isInteger(val) ? val.toLocaleString() : val.toFixed(2);
+      const label = r[labelKey] !== undefined ? String(r[labelKey]) : `Elemento #${idx + 1}`;
+
+      let secondaryMeta = "";
+      if (secondaryValKey && r[secondaryValKey] !== undefined) {
+        const secVal = parseFloat(r[secondaryValKey]);
+        const secStr = !isNaN(secVal) ? (Number.isInteger(secVal) ? secVal.toLocaleString() : secVal.toFixed(1)) : escapeHtml(String(r[secondaryValKey]));
+        secondaryMeta = `<span class="agent-chart-pill agent-chart-pill-purple">${escapeHtml(secondaryValKey)}: ${secStr}</span>`;
+      }
+
+      const fillClass = idx === 0 ? "agent-bar-fill" : (idx === 1 ? "agent-bar-fill-purple" : (idx === 2 ? "agent-bar-fill-amber" : "agent-bar-fill"));
+
+      barsHtml += `
+        <div class="agent-bar-row">
+          <div class="agent-bar-info">
+            <div class="agent-bar-label">
+              <span class="agent-rank-badge">#${idx + 1}</span>
+              <span>${escapeHtml(label)}</span>
+              ${secondaryMeta}
+            </div>
+            <div class="agent-bar-values">
+              <span class="agent-bar-val">${displayVal}</span>
+              <span class="agent-bar-pct">${pct}%</span>
+            </div>
+          </div>
+          <div class="agent-bar-track">
+            <div class="${fillClass}" style="width: 0%;" data-target-width="${pct}%"></div>
+          </div>
+        </div>
+      `;
+    });
+    barsHtml += `</div>`;
+
+    container.innerHTML = `
+      ${headerHtml}
+      ${barsHtml}
+    `;
+
+    // Trigger smooth fill animation
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        container.querySelectorAll(".agent-bar-track > div").forEach(el => {
+          const target = el.getAttribute("data-target-width");
+          if (target) el.style.width = target;
+        });
+      }, 50);
+    });
+  }
+
+  // ==========================================
   // TAB 3: AGENTIC AI ORCHESTRATOR (ReAct)
   // ==========================================
   const orchQueryInput = document.getElementById("orchQueryInput");
@@ -548,6 +835,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Render Final Answer
       orchFinalAnswerText.textContent = trace.final_answer;
+
+      // Render Dynamic Chart in Orchestrator Response if tool returned rows
+      const orchFinalChartContainer = document.getElementById("orchFinalChartContainer");
+      if (orchFinalChartContainer) {
+        let sqlRows = null;
+        if (trace.steps && Array.isArray(trace.steps)) {
+          for (let i = trace.steps.length - 1; i >= 0; i--) {
+            const step = trace.steps[i];
+            if (step.observation && Array.isArray(step.observation.rows) && step.observation.rows.length > 0) {
+              sqlRows = step.observation.rows;
+              break;
+            }
+          }
+        }
+
+        if (sqlRows && sqlRows.length > 0) {
+          orchFinalChartContainer.style.display = "block";
+          renderAgentResponseChart(sqlRows, orchFinalChartContainer, "Gráfico Visual Generado a partir de los Datos Extraídos");
+        } else {
+          orchFinalChartContainer.style.display = "none";
+        }
+      }
 
     } catch (err) {
       console.error(err);
@@ -948,10 +1257,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const kpiPromptTableWrapper = document.getElementById("kpiPromptTableWrapper");
   const btnCopyPromptAnswer = document.getElementById("btnCopyPromptAnswer");
 
+  const tabKpiDetailsChart = document.getElementById("tabKpiDetailsChart");
   const tabKpiDetailsTable = document.getElementById("tabKpiDetailsTable");
   const tabKpiDetailsSql = document.getElementById("tabKpiDetailsSql");
+  const kpiDetailsChartView = document.getElementById("kpiDetailsChartView");
   const kpiDetailsTableView = document.getElementById("kpiDetailsTableView");
   const kpiDetailsSqlView = document.getElementById("kpiDetailsSqlView");
+  const kpiPromptChartWrapper = document.getElementById("kpiPromptChartWrapper");
 
   // Presets
   document.getElementById("kpiPromptPreset1")?.addEventListener("click", () => {
@@ -967,20 +1279,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (kpiPromptInput) kpiPromptInput.value = "¿Cuántas solicitudes de Asistencia vial se han realizado por cada mes registrado?";
   });
 
-  // Toggle between Table and SQL code
-  tabKpiDetailsTable?.addEventListener("click", () => {
-    tabKpiDetailsTable.classList.add("active");
-    tabKpiDetailsSql?.classList.remove("active");
-    if (kpiDetailsTableView) kpiDetailsTableView.style.display = "block";
-    if (kpiDetailsSqlView) kpiDetailsSqlView.style.display = "none";
-  });
+  // Toggle between Chart, Table and SQL tabs
+  function switchKpiDetailsTab(tabName) {
+    tabKpiDetailsChart?.classList.toggle("active", tabName === "chart");
+    tabKpiDetailsTable?.classList.toggle("active", tabName === "table");
+    tabKpiDetailsSql?.classList.toggle("active", tabName === "sql");
 
-  tabKpiDetailsSql?.addEventListener("click", () => {
-    tabKpiDetailsSql.classList.add("active");
-    tabKpiDetailsTable?.classList.remove("active");
-    if (kpiDetailsTableView) kpiDetailsTableView.style.display = "none";
-    if (kpiDetailsSqlView) kpiDetailsSqlView.style.display = "block";
-  });
+    if (kpiDetailsChartView) kpiDetailsChartView.style.display = tabName === "chart" ? "block" : "none";
+    if (kpiDetailsTableView) kpiDetailsTableView.style.display = tabName === "table" ? "block" : "none";
+    if (kpiDetailsSqlView) kpiDetailsSqlView.style.display = tabName === "sql" ? "block" : "none";
+  }
+
+  tabKpiDetailsChart?.addEventListener("click", () => switchKpiDetailsTab("chart"));
+  tabKpiDetailsTable?.addEventListener("click", () => switchKpiDetailsTab("table"));
+  tabKpiDetailsSql?.addEventListener("click", () => switchKpiDetailsTab("sql"));
 
   btnCopyPromptAnswer?.addEventListener("click", () => {
     if (kpiPromptAnswerText) {
@@ -1039,6 +1351,17 @@ document.addEventListener("DOMContentLoaded", () => {
       if (kpiPromptResponseContent) kpiPromptResponseContent.style.display = "block";
       if (kpiPromptAnswerText) kpiPromptAnswerText.textContent = data.analysis;
       if (kpiPromptSqlCode) kpiPromptSqlCode.textContent = data.sql || "--";
+
+      // Render Dynamic Chart in Agent Response
+      if (kpiPromptChartWrapper) {
+        if (data.rows && data.rows.length > 0) {
+          renderAgentResponseChart(data.rows, kpiPromptChartWrapper, "Análisis Visual Generado por el Agente");
+          switchKpiDetailsTab("chart");
+        } else {
+          kpiPromptChartWrapper.innerHTML = "<div class='agent-chart-empty'>Sin datos numéricos para graficar.</div>";
+          switchKpiDetailsTab("table");
+        }
+      }
 
       // Render Data Table
       if (kpiPromptTableWrapper) {

@@ -556,6 +556,8 @@
               <button type="button" class="btn-copy" id="btnCopyOrchAnswer">Copiar</button>
             </div>
             <div class="final-answer-body" id="orchFinalAnswerText">--</div>
+            <!-- Dynamic Chart in Orchestrator Response -->
+            <div id="orchFinalChartContainer" class="agent-chart-wrapper" style="display: none; margin-top: 18px;"></div>
           </div>
         </section>
       </div><!-- End viewOrchestrator -->
@@ -842,18 +844,28 @@
                 --
               </div>
 
-              <!-- Collapsible Data & SQL Details -->
+              <!-- Dynamic Tabs for Agent Response: Chart, Table, SQL -->
               <div class="kpi-prompt-details-toggle">
-                <button type="button" class="kpi-details-tab active" id="tabKpiDetailsTable">📋 Tabla de Datos Extraídos</button>
+                <button type="button" class="kpi-details-tab active" id="tabKpiDetailsChart">📊 Gráfico Generado</button>
+                <button type="button" class="kpi-details-tab" id="tabKpiDetailsTable">📋 Tabla de Datos</button>
                 <button type="button" class="kpi-details-tab" id="tabKpiDetailsSql">🔍 Sentencia SQL SQLite</button>
               </div>
 
-              <div id="kpiDetailsTableView" class="kpi-details-panel">
+              <!-- 1. Dynamic Chart View (Default active view) -->
+              <div id="kpiDetailsChartView" class="kpi-details-panel">
+                <div id="kpiPromptChartWrapper" class="agent-chart-wrapper">
+                  <!-- Dynamic interactive visual chart rendered here -->
+                </div>
+              </div>
+
+              <!-- 2. Data Table View -->
+              <div id="kpiDetailsTableView" class="kpi-details-panel" style="display: none;">
                 <div class="table-wrapper" id="kpiPromptTableWrapper">
                   <!-- Dynamic table rendered here -->
                 </div>
               </div>
 
+              <!-- 3. SQL Query View -->
               <div id="kpiDetailsSqlView" class="kpi-details-panel" style="display: none;">
                 <pre class="kpi-sql-code" id="kpiPromptSqlCode">--</pre>
               </div>
