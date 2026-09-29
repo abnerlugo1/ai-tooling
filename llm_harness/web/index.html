@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Architecture Test Harness | API vs Modelos Integrados</title>
+  <meta name="description" content="Aplicación de prueba y benchmarking comparativo entre arquitecturas de LLM basadas en API en la nube y modelos integrados en proceso (On-Device).">
+  
+  <!-- Modern Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-background">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
+
+  <div class="app-container">
+    <!-- Top Navigation / Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">LLM Architecture Harness</h1>
+          <p class="brand-subtitle">Evaluador Comparativo: <strong>Modelos basados en API</strong> vs <strong>Modelos Integrados (In-Process)</strong></p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="status-pill" id="statusPill">
+          <span class="status-dot"></span>
+          <span id="statusText">Sistema Listo</span>
+        </div>
+        <div class="tag-branch">
+          <span class="branch-label">Branch:</span>
+          <code>DEV_Agent</code>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="main-content">
+      <!-- Input Panel & Configuration -->
+      <section class="control-panel glass-card">
+        <div class="panel-header">
+          <h2>Configuración de Prueba y Prompt</h2>
+          <span class="badge badge-info">Benchmark en Vivo</span>
+        </div>
+
+        <!-- Presets -->
+        <div class="preset-bar">
+          <span class="preset-label">Escenarios Rápidos:</span>
+          <button type="button" class="preset-btn" id="preset1">🔍 Comparación Conceptual</button>
+          <button type="button" class="preset-btn" id="preset2">📚 RAG con Capstone AWS</button>
+          <button type="button" class="preset-btn" id="preset3">🔒 Privacidad y Costos Críticos</button>
+        </div>
+
+        <!-- Prompt Textarea -->
+        <div class="input-group">
+          <label for="promptInput">Prompt de Inferencia:</label>
+          <textarea id="promptInput" rows="3" placeholder="Escribe aquí tu pregunta o instrucción para someterla a ambas arquitecturas...">Explica las ventajas, latencia y consideraciones de seguridad al elegir entre un modelo LLM accesible vía API (Cloud) frente a un modelo integrado localmente (In-Process).</textarea>
+        </div>
+
+        <!-- Controls Row -->
+        <div class="controls-row">
+          <div class="control-item">
+            <label for="temperatureSelect">Temperatura:</label>
+            <select id="temperatureSelect" class="form-select">
+              <option value="0.2">0.2 (Determinista / Preciso)</option>
+              <option value="0.7" selected>0.7 (Equilibrado)</option>
+              <option value="1.0">1.0 (Creativo)</option>
+            </select>
+          </div>
+
+          <div class="control-item">
+            <label for="maxTokensSelect">Máx. Tokens:</label>
+            <select id="maxTokensSelect" class="form-select">
+              <option value="256">256 tokens</option>
+              <option value="512" selected>512 tokens</option>
+              <option value="1024">1024 tokens</option>
+            </select>
+          </div>
+
+          <div class="control-item toggle-item">
+            <label class="switch-label">
+              <input type="checkbox" id="toggleRAG">
+              <span class="slider"></span>
+              <span class="switch-text">Activar RAG Contextual (Ingesta Local)</span>
+            </label>
+          </div>
+
+          <button type="button" class="btn-primary" id="btnCompare">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Ejecutar Comparativa</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Global Result Banner -->
+      <section class="summary-banner glass-card" id="summaryBanner" style="display: none;">
+        <div class="summary-icon" id="summaryIcon">⚡</div>
+        <div class="summary-details">
+          <h3 id="summaryTitle">Resultados del Benchmark</h3>
+          <p id="summaryText">Ejecuta una consulta para ver el análisis de diferenciales.</p>
+        </div>
+        <div class="summary-metrics">
+          <div class="summary-kpi">
+            <span class="kpi-label">Diferencial de Latencia</span>
+            <span class="kpi-value text-emerald" id="kpiLatencyDelta">-- ms</span>
+          </div>
+          <div class="summary-kpi">
+            <span class="kpi-label">Ahorro en Costo / Consulta</span>
+            <span class="kpi-value text-cyan" id="kpiCostDelta">$0.000000</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Comparison Grid (Side by Side Cards) -->
+      <section class="comparison-grid">
+        <!-- Card 1: API-Based Architecture -->
+        <article class="arch-card glass-card" id="apiCard">
+          <div class="card-header">
+            <div class="arch-title-wrap">
+              <span class="arch-pill pill-cloud">Cloud Managed</span>
+              <h3 class="arch-title">Arquitectura Basada en API</h3>
+              <p class="model-id" id="apiModelName">Anthropic Claude 3.5 Sonnet / AWS Bedrock</p>
+            </div>
+            <div class="winner-badge" id="apiWinnerBadge"></div>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-cell">
+              <span class="metric-title">Latencia Total</span>
+              <span class="metric-num" id="apiTotalLatency">-- ms</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">TTFT (1er Token)</span>
+              <span class="metric-num" id="apiTTFT">-- ms</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">Throughput</span>
+              <span class="metric-num" id="apiThroughput">-- tps</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">Costo por Consulta</span>
+              <span class="metric-num text-amber" id="apiCost">-- USD</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">Memoria Cliente</span>
+              <span class="metric-num" id="apiMemory">~12.5 MB</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">Privacidad / Tránsito</span>
+              <span class="metric-badge badge-warning" id="apiPrivacy">Tránsito Cifrado</span>
+            </div>
+          </div>
+
+          <div class="response-wrapper">
+            <div class="response-header">
+              <span>Salida Generada</span>
+              <button type="button" class="btn-copy" id="btnCopyApi">Copiar</button>
+            </div>
+            <pre class="response-body" id="apiResponseText">Esperando ejecución...</pre>
+          </div>
+        </article>
+
+        <!-- Card 2: Embedded Architecture -->
+        <article class="arch-card glass-card" id="embeddedCard">
+          <div class="card-header">
+            <div class="arch-title-wrap">
+              <span class="arch-pill pill-local">In-Process / On-Device</span>
+              <h3 class="arch-title">Arquitectura de Modelo Integrado</h3>
+              <p class="model-id" id="embeddedModelName">Qwen 2.5 Coder 7B GGUF (In-Process Engine)</p>
+            </div>
+            <div class="winner-badge" id="embeddedWinnerBadge"></div>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-cell">
+              <span class="metric-title">Latencia Total</span>
+              <span class="metric-num text-emerald" id="embeddedTotalLatency">-- ms</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">TTFT (1er Token)</span>
+              <span class="metric-num text-emerald" id="embeddedTTFT">-- ms</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">Throughput</span>
+              <span class="metric-num" id="embeddedThroughput">-- tps</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">Costo por Consulta</span>
+              <span class="metric-num text-emerald" id="embeddedCost">$0.000000</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">Memoria Cliente</span>
+              <span class="metric-num text-amber" id="embeddedMemory">4,200 MB</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">Privacidad / Tránsito</span>
+              <span class="metric-badge badge-success" id="embeddedPrivacy">Air-Gapped (100% Local)</span>
+            </div>
+          </div>
+
+          <div class="response-wrapper">
+            <div class="response-header">
+              <span>Salida Generada</span>
+              <button type="button" class="btn-copy" id="btnCopyEmbedded">Copiar</button>
+            </div>
+            <pre class="response-body" id="embeddedResponseText">Esperando ejecución...</pre>
+          </div>
+        </article>
+      </section>
+
+      <!-- Architecture Trade-Offs Reference Table -->
+      <section class="tradeoff-section glass-card">
+        <div class="panel-header">
+          <h2>Matriz de Decisión y Criterios de Selección</h2>
+          <span class="badge badge-primary">Guía de Ingeniería</span>
+        </div>
+        <div class="table-responsive">
+          <table class="tradeoff-table">
+            <thead>
+              <tr>
+                <th>Dimensión</th>
+                <th>Arquitectura Basada en API</th>
+                <th>Arquitectura de Modelo Integrado</th>
+                <th>Recomendación Típica</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Modelo de Costos</strong></td>
+                <td>OPEX puro: Paga por token consumido (Prompt + Completion).</td>
+                <td>CAPEX / Hardware: $0.00 por token; amortización por infraestructura.</td>
+                <td>API para tráfico variable; Integrado para volumen masivo y continuo.</td>
+              </tr>
+              <tr>
+                <td><strong>Requisitos de Hardware</strong></td>
+                <td>Mínimos (cualquier microservicio o navegador ligero; &lt;50 MB RAM).</td>
+                <td>Elevados: Exige 4GB a 32GB de RAM/VRAM según cuantización (GGUF).</td>
+                <td>Integrado en servidores on-prem o edge devices dedicados.</td>
+              </tr>
+              <tr>
+                <td><strong>Latencia y Red</strong></td>
+                <td>Sujeto a RTT de red, jitter de internet y colas de inferencia externa.</td>
+                <td>Predecible y ultra-rápido en TTFT; sin latencia de tránsito WAN.</td>
+                <td>Integrado cuando se requiere tiempo real estricto en el borde.</td>
+              </tr>
+              <tr>
+                <td><strong>Privacidad y Compliance</strong></td>
+                <td>Datos viajan a infraestructura cloud de terceros (requiere DPA/BAA).</td>
+                <td>Air-Gapped completo; datos sensibles jamás abandonan el proceso local.</td>
+                <td>Integrado para defensa, banca confidencial y registros médicos.</td>
+              </tr>
+              <tr>
+                <td><strong>Capacidad de Modelo</strong></td>
+                <td>Acceso a modelos de frontera masivos (Claude 3.5 Sonnet, GPT-4o).</td>
+                <td>Acotado a modelos SLM compactos (1B - 14B parámetros).</td>
+                <td>Híbrido (Dracula Pattern): Clasificación local + razonamiento complejo en API.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>AI Tooling Specialization · Capstone & Architectural Benchmark · Coursera Applied AI Engineering</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
