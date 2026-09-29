@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (tab === "kpi") {
       tabBtnKPI?.classList.add("active");
       if (viewKPI) viewKPI.style.display = "block";
+      loadVisualKPIDashboard();
     }
   }
 
@@ -623,129 +624,299 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ==========================================
-  // TAB 4: KPI ANALYTICS COPILOT (dashboard.db)
+  // TAB 4: DEDICATED VISUAL KPI DASHBOARD (dashboard.db)
   // ==========================================
-  const kpiQueryInput = document.getElementById("kpiQueryInput");
-  const btnRunKPI = document.getElementById("btnRunKPI");
-  const kpiResultSection = document.getElementById("kpiResultSection");
-  const kpiMetaSubtitle = document.getElementById("kpiMetaSubtitle");
-  const kpiGuardAlert = document.getElementById("kpiGuardAlert");
-  const kpiGuardText = document.getElementById("kpiGuardText");
-  const kpiAnalysisContent = document.getElementById("kpiAnalysisContent");
-  const kpiAnalysisText = document.getElementById("kpiAnalysisText");
-  const kpiSqlCode = document.getElementById("kpiSqlCode");
-  const kpiRowCount = document.getElementById("kpiRowCount");
-  const kpiTableWrapper = document.getElementById("kpiTableWrapper");
-  const btnCopyKPI = document.getElementById("btnCopyKPI");
+  let kpiMetricsCache = null;
+  let currentKpiFocus = "global";
 
-  // KPI Presets
-  document.getElementById("kpiPreset1")?.addEventListener("click", () => {
-    kpiQueryInput.value = "¿Cuál es la edad promedio de los clientes desglosada por cada categoría de servicio?";
-  });
-  document.getElementById("kpiPreset2")?.addEventListener("click", () => {
-    kpiQueryInput.value = "¿Cuáles son los 5 servicios más solicitados en total y cuántas solicitudes tiene cada uno?";
-  });
-  document.getElementById("kpiPreset3")?.addEventListener("click", () => {
-    kpiQueryInput.value = "¿Cuál es el porcentaje y cantidad total de clientes por género en la base de datos?";
-  });
-  document.getElementById("kpiPreset4")?.addEventListener("click", () => {
-    kpiQueryInput.value = "¿Cuántas solicitudes corresponden a Asistencia vial y cuál es el servicio más frecuente dentro de esta categoría?";
-  });
-  document.getElementById("kpiPreset5")?.addEventListener("click", () => {
-    kpiQueryInput.value = "¿Cómo se distribuyen las solicitudes por fecha o año en dashboard.db?";
+  const btnRefreshCharts = document.getElementById("btnRefreshCharts");
+  const scTotalRecords = document.getElementById("scTotalRecords");
+  const scTopCategory = document.getElementById("scTopCategory");
+  const scTopCategoryPct = document.getElementById("scTopCategoryPct");
+  const scAvgAge = document.getElementById("scAvgAge");
+  const scAgeRange = document.getElementById("scAgeRange");
+  const scGenderRatio = document.getElementById("scGenderRatio");
+
+  const chartCategoriesContainer = document.getElementById("chartCategoriesContainer");
+  const chartGenderContainer = document.getElementById("chartGenderContainer");
+  const chartTopServicesContainer = document.getElementById("chartTopServicesContainer");
+  const chartTimelineContainer = document.getElementById("chartTimelineContainer");
+  const chartAnalysisText = document.getElementById("chartAnalysisText");
+  const btnCopyChartAnalysis = document.getElementById("btnCopyChartAnalysis");
+
+  // Focus Pills Setup
+  const focusPillButtons = [
+    { btn: document.getElementById("btnFocusGlobal"), focus: "global" },
+    { btn: document.getElementById("btnFocusCategories"), focus: "categories" },
+    { btn: document.getElementById("btnFocusDemographics"), focus: "demographics" },
+    { btn: document.getElementById("btnFocusServices"), focus: "services" },
+  ];
+
+  focusPillButtons.forEach(({ btn, focus }) => {
+    btn?.addEventListener("click", () => {
+      focusPillButtons.forEach(item => item.btn?.classList.remove("active"));
+      btn.classList.add("active");
+      currentKpiFocus = focus;
+      loadChartAnalysis(focus);
+    });
   });
 
-  btnCopyKPI?.addEventListener("click", () => {
-    if (kpiAnalysisText) {
-      navigator.clipboard.writeText(kpiAnalysisText.textContent);
-      btnCopyKPI.textContent = "¡Copiado!";
-      setTimeout(() => { btnCopyKPI.textContent = "Copiar Análisis"; }, 1500);
+  btnCopyChartAnalysis?.addEventListener("click", () => {
+    if (chartAnalysisText) {
+      navigator.clipboard.writeText(chartAnalysisText.textContent);
+      btnCopyChartAnalysis.textContent = "¡Copiado!";
+      setTimeout(() => { btnCopyChartAnalysis.textContent = "Copiar Análisis"; }, 1500);
     }
   });
 
-  async function runKPIQuery() {
-    const query = kpiQueryInput?.value.trim();
-    if (!query) return;
+  btnRefreshCharts?.addEventListener("click", () => {
+    loadVisualKPIDashboard(true);
+  });
 
-    btnRunKPI.disabled = true;
-    btnRunKPI.innerHTML = `
-      <svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
-        <path d="M12 2a10 10 0 0 1 10 10" />
+  // Render Category Horizontal Bars
+  function renderCategoriesChart(categories) {
+    if (!chartCategoriesContainer) return;
+    if (!categories || categories.length === 0) {
+      chartCategoriesContainer.innerHTML = "<div class='empty-state'>Sin datos de categorías.</div>";
+      return;
+    }
+
+    let html = "";
+    categories.forEach(cat => {
+      html += `
+        <div class="cat-bar-item">
+          <div class="cat-bar-info">
+            <span class="cat-bar-name">${cat.categoria}</span>
+            <span class="cat-bar-meta"><strong>${cat.total.toLocaleString()}</strong> (${cat.pct}%) · Edad prom: ${cat.avg_age} años</span>
+          </div>
+          <div class="cat-bar-track">
+            <div class="cat-bar-fill" style="width: ${cat.pct}%; background: ${cat.color}; box-shadow: 0 0 10px ${cat.color}66;"></div>
+          </div>
+        </div>
+      `;
+    });
+    chartCategoriesContainer.innerHTML = html;
+  }
+
+  // Render SVG Gender Donut Chart
+  function renderGenderDonut(gender, totalRecords) {
+    if (!chartGenderContainer) return;
+    if (!gender || gender.length === 0) {
+      chartGenderContainer.innerHTML = "<div class='empty-state'>Sin datos de demografía.</div>";
+      return;
+    }
+
+    const fem = gender.find(g => g.genero === "F") || { total: 0, pct: 50, avg_age: 40 };
+    const masc = gender.find(g => g.genero === "M") || { total: 0, pct: 50, avg_age: 40 };
+
+    // Donut SVG parameters (r = 52, perimeter = 2 * PI * 52 = 326.72)
+    const perimeter = 326.72;
+    const femDash = ((fem.pct / 100.0) * perimeter).toFixed(2);
+    const mascDash = ((masc.pct / 100.0) * perimeter).toFixed(2);
+
+    const html = `
+      <div class="donut-svg-wrapper">
+        <svg viewBox="0 0 160 160" width="160" height="160" style="transform: rotate(-90deg);">
+          <!-- Background track -->
+          <circle cx="80" cy="80" r="52" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="20" />
+          <!-- Male segment (Cyan) -->
+          <circle cx="80" cy="80" r="52" fill="none" stroke="#06b6d4" stroke-width="20"
+                  stroke-dasharray="${mascDash} ${perimeter}" stroke-dashoffset="0"
+                  stroke-linecap="butt" style="transition: stroke-dasharray 1s ease;" />
+          <!-- Female segment (Pink) -->
+          <circle cx="80" cy="80" r="52" fill="none" stroke="#ec4899" stroke-width="20"
+                  stroke-dasharray="${femDash} ${perimeter}" stroke-dashoffset="-${mascDash}"
+                  stroke-linecap="butt" style="transition: stroke-dasharray 1s ease;" />
+        </svg>
+        <div class="donut-center-text">
+          <span class="donut-center-val">${totalRecords.toLocaleString()}</span>
+          <span class="donut-center-sub">Total Clientes</span>
+        </div>
+      </div>
+      <div class="donut-legend">
+        <div class="donut-legend-item">
+          <span class="donut-dot" style="background: #ec4899; box-shadow: 0 0 8px rgba(236,72,153,0.5);"></span>
+          <div>
+            <div><strong>Femenino:</strong> ${fem.total.toLocaleString()} (${fem.pct}%)</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">Edad promedio: ${fem.avg_age} años</div>
+          </div>
+        </div>
+        <div class="donut-legend-item">
+          <span class="donut-dot" style="background: #06b6d4; box-shadow: 0 0 8px rgba(6,182,212,0.5);"></span>
+          <div>
+            <div><strong>Masculino:</strong> ${masc.total.toLocaleString()} (${masc.pct}%)</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">Edad promedio: ${masc.avg_age} años</div>
+          </div>
+        </div>
+      </div>
+    `;
+    chartGenderContainer.innerHTML = html;
+  }
+
+  // Render Top 6 Services Ranking
+  function renderTopServices(topServices) {
+    if (!chartTopServicesContainer) return;
+    if (!topServices || topServices.length === 0) {
+      chartTopServicesContainer.innerHTML = "<div class='empty-state'>Sin datos de servicios.</div>";
+      return;
+    }
+
+    let html = "";
+    topServices.forEach((srv, idx) => {
+      html += `
+        <div class="ranking-item">
+          <span class="ranking-pill">#${idx + 1}</span>
+          <div class="ranking-name">
+            <strong>${srv.servicio}</strong>
+            <span class="ranking-cat">(${srv.categoria})</span>
+          </div>
+          <span class="ranking-val">${srv.total.toLocaleString()}</span>
+          <span class="ranking-pct">${srv.pct}%</span>
+        </div>
+      `;
+    });
+    chartTopServicesContainer.innerHTML = html;
+  }
+
+  // Render Monthly Timeline Bar Chart (Pure SVG)
+  function renderTimelineChart(timeline) {
+    if (!chartTimelineContainer) return;
+    if (!timeline || timeline.length === 0) {
+      chartTimelineContainer.innerHTML = "<div class='empty-state'>Sin datos temporales.</div>";
+      return;
+    }
+
+    const maxVal = Math.max(...timeline.map(t => t.total), 300);
+    const svgWidth = 560;
+    const svgHeight = 210;
+    const barWidth = 26;
+    const chartBottom = 165;
+    const maxBarHeight = 120;
+
+    let barsSvg = "";
+    const stepX = (svgWidth - 60) / timeline.length;
+
+    timeline.forEach((item, i) => {
+      const x = 30 + (i * stepX);
+      const h = Math.round((item.total / maxVal) * maxBarHeight);
+      const y = chartBottom - h;
+      const displayMonth = item.month.replace("20", ""); // e.g. "24-11"
+
+      barsSvg += `
+        <g class="timeline-bar-group">
+          <!-- Count text on top of bar -->
+          <text x="${x + (barWidth / 2)}" y="${y - 6}" font-size="10" fill="#38bdf8" text-anchor="middle" font-weight="600">
+            ${item.total}
+          </text>
+          <!-- Bar column with glow -->
+          <rect x="${x}" y="${y}" width="${barWidth}" height="${h}" rx="4" fill="url(#kpiBarGradient)"
+                opacity="0.88" style="transition: height 0.6s ease, y 0.6s ease; cursor: pointer;">
+            <title>Mes: ${item.month} | Solicitudes: ${item.total}</title>
+          </rect>
+          <!-- Month label at bottom -->
+          <text x="${x + (barWidth / 2)}" y="${chartBottom + 18}" font-size="10" fill="#94a3b8" text-anchor="middle">
+            ${displayMonth}
+          </text>
+        </g>
+      `;
+    });
+
+    const svg = `
+      <svg viewBox="0 0 ${svgWidth} ${svgHeight}" width="100%" height="100%" style="overflow: visible;">
+        <defs>
+          <linearGradient id="kpiBarGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#38bdf8" />
+            <stop offset="100%" stop-color="#0284c7" />
+          </linearGradient>
+        </defs>
+        <!-- Horizontal grid line -->
+        <line x1="20" y1="${chartBottom}" x2="${svgWidth - 10}" y2="${chartBottom}" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
+        <line x1="20" y1="${chartBottom - 60}" x2="${svgWidth - 10}" y2="${chartBottom - 60}" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4" />
+        <line x1="20" y1="${chartBottom - 120}" x2="${svgWidth - 10}" y2="${chartBottom - 120}" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4" />
+        ${barsSvg}
       </svg>
-      <span>Consultando con OpenAI...</span>
     `;
 
-    kpiResultSection.style.display = "block";
-    kpiGuardAlert.style.display = "none";
-    kpiAnalysisContent.style.display = "block";
-    kpiAnalysisText.textContent = "Generando consulta SQL y analizando métricas cuantitativas con OpenAI gpt-6-luna...";
-    kpiSqlCode.textContent = "Generando sentencia SQL...";
-    kpiTableWrapper.innerHTML = "<div class='empty-state'>Cargando datos desde SQLite...</div>";
+    chartTimelineContainer.innerHTML = svg;
+  }
+
+  // Load Executive Analysis from OpenAI based on the Charts
+  async function loadChartAnalysis(focus = "global") {
+    if (!chartAnalysisText) return;
+    chartAnalysisText.innerHTML = `
+      <div class="loading-state" style="display:flex; align-items:center; gap:8px;">
+        <svg class="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" />
+        </svg>
+        <span>Generando análisis estratégico con OpenAI gpt-6-luna (enfoque: ${focus})...</span>
+      </div>
+    `;
 
     try {
-      const resp = await fetch("/api/kpi/query", {
+      const resp = await fetch("/api/kpi/analyze-charts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query }),
+        body: JSON.stringify({ focus }),
       });
-
-      if (!resp.ok) throw new Error(`HTTP Error ${resp.status}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
-
-      kpiMetaSubtitle.textContent = `Modelo: ${data.model_name || "OpenAI gpt-6-luna"} | Latencia: ${data.latency_ms} ms | Base de Datos: dashboard.db (${data.total_db_records.toLocaleString()} registros)`;
-
-      // Handle guardrail out-of-scope response
-      if (data.is_kpi_query === false) {
-        kpiGuardAlert.style.display = "flex";
-        kpiGuardText.textContent = data.analysis;
-        kpiAnalysisContent.style.display = "none";
-        return;
-      }
-
-      // Valid KPI Response
-      kpiGuardAlert.style.display = "none";
-      kpiAnalysisContent.style.display = "block";
-      kpiAnalysisText.textContent = data.analysis;
-      kpiSqlCode.textContent = data.sql || "--";
-
-      // Render Data Table
-      kpiRowCount.textContent = data.total_rows || 0;
-      if (data.rows && data.rows.length > 0) {
-        const cols = Object.keys(data.rows[0]);
-        let tableHtml = `<table class="kpi-data-table"><thead><tr>`;
-        cols.forEach(c => tableHtml += `<th>${c}</th>`);
-        tableHtml += `</tr></thead><tbody>`;
-        data.rows.forEach(r => {
-          tableHtml += `<tr>`;
-          cols.forEach(c => tableHtml += `<td>${r[c] !== null && r[c] !== undefined ? r[c] : ""}</td>`);
-          tableHtml += `</tr>`;
-        });
-        tableHtml += `</tbody></table>`;
-        kpiTableWrapper.innerHTML = tableHtml;
-      } else {
-        kpiTableWrapper.innerHTML = "<div class='empty-state'>Sin filas devueltas para los criterios especificados.</div>";
-      }
-
+      chartAnalysisText.textContent = data.analysis;
     } catch (err) {
       console.error(err);
-      kpiAnalysisText.textContent = `Error al consultar KPI: ${err.message}`;
-    } finally {
-      btnRunKPI.disabled = false;
-      btnRunKPI.innerHTML = `
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polygon points="5 3 19 12 5 21 5 3"></polygon>
-        </svg>
-        <span>Consultar KPI con OpenAI</span>
-      `;
+      chartAnalysisText.textContent = `Error al sintetizar análisis estratégico con OpenAI: ${err.message}`;
     }
   }
 
-  btnRunKPI?.addEventListener("click", runKPIQuery);
-  kpiQueryInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      runKPIQuery();
+  // Main KPI Dashboard Loader
+  async function loadVisualKPIDashboard(forceRefresh = false) {
+    if (kpiMetricsCache && !forceRefresh) {
+      return;
     }
-  });
+
+    if (btnRefreshCharts) {
+      btnRefreshCharts.disabled = true;
+    }
+
+    try {
+      const res = await fetch("/api/kpi/dashboard-metrics");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      kpiMetricsCache = data;
+
+      // 1. Update Scorecards
+      if (scTotalRecords) scTotalRecords.textContent = (data.summary.total_records || 2999).toLocaleString();
+      if (scTopCategory) scTopCategory.textContent = data.summary.top_category || "Asistencia vial";
+      if (scTopCategoryPct) {
+        const topCat = data.categories?.[0];
+        scTopCategoryPct.textContent = topCat ? `${topCat.total.toLocaleString()} (${topCat.pct}% del total)` : "--";
+      }
+      if (scAvgAge) scAvgAge.textContent = `${data.summary.avg_age || 40.2} años`;
+      if (scAgeRange) scAgeRange.textContent = `Rango: ${data.summary.min_age || 18} a ${data.summary.max_age || 65} años`;
+      if (scGenderRatio && data.gender && data.gender.length >= 2) {
+        const fem = data.gender.find(g => g.genero === "F") || { pct: 59 };
+        const masc = data.gender.find(g => g.genero === "M") || { pct: 41 };
+        scGenderRatio.textContent = `${fem.pct}% F / ${masc.pct}% M`;
+      }
+
+      // 2. Render 4 Core Interactive Charts
+      renderCategoriesChart(data.categories);
+      renderGenderDonut(data.gender, data.summary.total_records);
+      renderTopServices(data.top_services);
+      renderTimelineChart(data.timeline);
+
+      // 3. Load OpenAI Strategic Analysis
+      loadChartAnalysis(currentKpiFocus);
+
+    } catch (e) {
+      console.error("Error loading KPI dashboard metrics:", e);
+      if (chartCategoriesContainer) {
+        chartCategoriesContainer.innerHTML = `<div class='empty-state text-amber'>Error al cargar métricas: ${e.message}</div>`;
+      }
+    } finally {
+      if (btnRefreshCharts) {
+        btnRefreshCharts.disabled = false;
+      }
+    }
+  }
 });

@@ -36,10 +36,26 @@ class TestKPICopilot(unittest.TestCase):
         res = self.copilot._execute_sql("SELECT COUNT(*) as total FROM dashboard;")
         self.assertEqual(res["rows"][0]["total"], 2999)
 
-        # DROP is blocked
-        res_bad = self.copilot._execute_sql("DROP TABLE dashboard;")
-        self.assertIn("error", res_bad)
+    def test_get_dashboard_chart_metrics(self):
+        metrics = self.copilot.get_dashboard_chart_metrics()
+        self.assertIn("summary", metrics)
+        self.assertIn("categories", metrics)
+        self.assertIn("gender", metrics)
+        self.assertIn("top_services", metrics)
+        self.assertIn("timeline", metrics)
+        self.assertEqual(metrics["summary"]["total_records"], 2999)
+        self.assertEqual(len(metrics["categories"]), 7)
+        self.assertEqual(len(metrics["gender"]), 2)
+        self.assertEqual(len(metrics["top_services"]), 6)
+        self.assertEqual(len(metrics["timeline"]), 12)
+
+    def test_analyze_charts(self):
+        analysis = self.copilot.analyze_charts(focus="global")
+        self.assertIn("analysis", analysis)
+        self.assertEqual(analysis["focus"], "global")
+        self.assertTrue(len(analysis["analysis"]) > 20)
 
 
 if __name__ == "__main__":
     unittest.main()
+

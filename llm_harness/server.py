@@ -61,6 +61,13 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(stats_data)
             return
 
+        if parsed_url.path == "/api/kpi/dashboard-metrics":
+            from orchestration.kpi_copilot import KPICopilot
+            copilot = KPICopilot()
+            metrics = copilot.get_dashboard_chart_metrics()
+            self._send_json(metrics)
+            return
+
         if parsed_url.path == "/api/vector/clusters":
             store = VectorStore(db_path=".vector_store.db")
             # Sample up to 120 points for 2D visualization
@@ -271,6 +278,15 @@ class HarnessRequestHandler(SimpleHTTPRequestHandler):
             copilot = KPICopilot()
             result = copilot.ask_kpi(query)
             self._send_json(result)
+            return
+
+        # 7. Executive Chart Analysis with OpenAI
+        if parsed_url.path == "/api/kpi/analyze-charts":
+            focus = body.get("focus", "global")
+            from orchestration.kpi_copilot import KPICopilot
+            copilot = KPICopilot()
+            analysis_res = copilot.analyze_charts(focus=focus)
+            self._send_json(analysis_res)
             return
 
         self._send_json({"error": f"Endpoint not found: {parsed_url.path}"}, status=404)

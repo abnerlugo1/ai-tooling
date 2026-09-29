@@ -560,98 +560,156 @@
         </section>
       </div><!-- End viewOrchestrator -->
 
-      <!-- VIEW 4: Dedicated OpenAI KPI Analytics (dashboard.db) -->
+      <!-- VIEW 4: Dedicated Visual KPI Charts Dashboard (dashboard.db) -->
       <div id="viewKPI" style="display: none;">
+        <!-- Header & Action Panel -->
         <section class="control-panel glass-card">
           <div class="panel-header">
             <div>
-              <h2>Copilot de KPIs con OpenAI (Exclusivo dashboard.db)</h2>
-              <p class="panel-subtitle">Consulta inteligente y estricta de métricas cuantitativas, promedios y distribución sobre los 2,999 registros de <code>Documents/dashboard.db</code>.</p>
+              <h2>Dashboard Visual de KPIs (dashboard.db)</h2>
+              <p class="panel-subtitle">Visualización analítica interactiva y gráficos en tiempo real sobre los 2,999 registros de la base de datos de SQLite.</p>
             </div>
-            <div class="kpi-guard-badge">
-              <span class="status-dot dot-cyan"></span>
-              <span>Modo Estricto: Solo KPIs de dashboard.db</span>
+            <div class="kpi-header-btns">
+              <span class="kpi-guard-badge">
+                <span class="status-dot dot-cyan"></span>
+                <span>Base Activa: SQLite (2,999 filas)</span>
+              </span>
+              <button type="button" class="btn-secondary btn-sm" id="btnRefreshCharts">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M1 20v-6h6"></path>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+                <span>Actualizar Gráficos</span>
+              </button>
             </div>
           </div>
 
-          <!-- KPI Quick Presets -->
-          <div class="preset-bar">
-            <span class="preset-label">Métricas Clave:</span>
-            <button type="button" class="preset-btn" id="kpiPreset1">📊 Edad Promedio por Categoría</button>
-            <button type="button" class="preset-btn" id="kpiPreset2">🏆 Top 5 Servicios Más Solicitados</button>
-            <button type="button" class="preset-btn" id="kpiPreset3">👥 % Clientes por Género</button>
-            <button type="button" class="preset-btn" id="kpiPreset4">🚗 Desglose Asistencia Vial</button>
-            <button type="button" class="preset-btn" id="kpiPreset5">📅 Solicitudes por Año / Tendencia</button>
-          </div>
-
-          <!-- Query Input -->
-          <div class="input-group">
-            <label for="kpiQueryInput">Pregunta sobre KPIs de la base de datos:</label>
-            <textarea id="kpiQueryInput" rows="2" class="form-input" placeholder="Pregunta una métrica, promedio, volumen o porcentaje de la base de datos dashboard.db...">¿Cuál es la edad promedio de los clientes desglosada por cada categoría de servicio?</textarea>
-          </div>
-
-          <div class="controls-row">
-            <div class="kpi-db-indicator">
-              <span class="indicator-icon">🗄️</span>
-              <div>
-                <strong>Base de Datos Activa:</strong> <code>Documents/dashboard.db</code> (2,999 registros)
+          <!-- Top 4 KPI Metric Scorecards -->
+          <div class="kpi-scorecards-grid">
+            <div class="kpi-scorecard">
+              <div class="scorecard-icon icon-cyan">📊</div>
+              <div class="scorecard-data">
+                <span class="scorecard-label">Total Solicitudes</span>
+                <span class="scorecard-value" id="scTotalRecords">2,999</span>
+                <span class="scorecard-sub">100% registros sincronizados</span>
               </div>
             </div>
 
-            <button type="button" class="btn-primary" id="btnRunKPI">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polygon points="5 3 19 12 5 21 5 3"></polygon>
-              </svg>
-              <span>Consultar KPI con OpenAI</span>
-            </button>
+            <div class="kpi-scorecard">
+              <div class="scorecard-icon icon-indigo">🚗</div>
+              <div class="scorecard-data">
+                <span class="scorecard-label">Categoría Líder</span>
+                <span class="scorecard-value text-cyan" id="scTopCategory">Asistencia vial</span>
+                <span class="scorecard-sub" id="scTopCategoryPct">1,702 (56.8% del total)</span>
+              </div>
+            </div>
+
+            <div class="kpi-scorecard">
+              <div class="scorecard-icon icon-emerald">👥</div>
+              <div class="scorecard-data">
+                <span class="scorecard-label">Edad Promedio</span>
+                <span class="scorecard-value text-emerald" id="scAvgAge">40.2 años</span>
+                <span class="scorecard-sub" id="scAgeRange">Rango: 18 a 65 años</span>
+              </div>
+            </div>
+
+            <div class="kpi-scorecard">
+              <div class="scorecard-icon icon-pink">⚖️</div>
+              <div class="scorecard-data">
+                <span class="scorecard-label">Distribución Género</span>
+                <span class="scorecard-value text-pink" id="scGenderRatio">59% F / 41% M</span>
+                <span class="scorecard-sub">1,769 Mujeres · 1,230 Hombres</span>
+              </div>
+            </div>
           </div>
         </section>
 
-        <!-- KPI Results Section -->
-        <section class="glass-card kpi-results-section" id="kpiResultSection" style="display: none;">
+        <!-- Charts Grid (4 Core Interactive Graphs) -->
+        <section class="charts-dashboard-grid">
+          <!-- Chart 1: Categories Bar Chart -->
+          <div class="glass-card chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3 class="chart-title">Distribución por Categoría de Servicio</h3>
+                <p class="chart-subtitle">Volumen total y porcentaje de demanda por área</p>
+              </div>
+              <span class="badge badge-info">7 Categorías</span>
+            </div>
+            <div class="chart-body" id="chartCategoriesContainer">
+              <div class="loading-state">Cargando gráfico de categorías...</div>
+            </div>
+          </div>
+
+          <!-- Chart 2: Gender Donut Chart -->
+          <div class="glass-card chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3 class="chart-title">Proporción de Clientes por Género</h3>
+                <p class="chart-subtitle">Desglose porcentual y promedios de edad</p>
+              </div>
+              <span class="badge badge-primary">Demografía</span>
+            </div>
+            <div class="chart-body donut-chart-body" id="chartGenderContainer">
+              <div class="loading-state">Cargando gráfico de género...</div>
+            </div>
+          </div>
+
+          <!-- Chart 3: Top 6 Services Ranking -->
+          <div class="glass-card chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3 class="chart-title">Ranking: Top 6 Servicios Específicos</h3>
+                <p class="chart-subtitle">Servicios individuales de mayor impacto operativo</p>
+              </div>
+              <span class="badge badge-success">Mayor Demanda</span>
+            </div>
+            <div class="chart-body" id="chartTopServicesContainer">
+              <div class="loading-state">Cargando ranking de servicios...</div>
+            </div>
+          </div>
+
+          <!-- Chart 4: Monthly Timeline Trend -->
+          <div class="glass-card chart-card">
+            <div class="chart-card-header">
+              <div>
+                <h3 class="chart-title">Volumen Temporal de Solicitudes</h3>
+                <p class="chart-subtitle">Tendencia mensual de registros (2024 - 2025)</p>
+              </div>
+              <span class="badge badge-info">12 Meses</span>
+            </div>
+            <div class="chart-body timeline-chart-body" id="chartTimelineContainer">
+              <div class="loading-state">Cargando tendencia temporal...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Executive Strategic Analysis with OpenAI based on the Charts -->
+        <section class="glass-card kpi-ai-insights-section">
           <div class="panel-header">
             <div>
-              <h3>Resultado del Análisis de KPI</h3>
-              <p class="panel-subtitle" id="kpiMetaSubtitle">Modelo: OpenAI gpt-6-luna | Latencia: -- ms</p>
+              <h3>Análisis Estratégico Ejecutivo de los Gráficos (OpenAI)</h3>
+              <p class="panel-subtitle">Interpretación automatizada de hallazgos, patrones y recomendaciones de negocio generada por OpenAI gpt-6-luna.</p>
             </div>
-            <div class="kpi-actions">
-              <button type="button" class="btn-copy" id="btnCopyKPI">Copiar Análisis</button>
+            <div class="ai-focus-pills">
+              <span class="preset-label">Enfoque:</span>
+              <button type="button" class="preset-btn active" data-focus="global" id="btnFocusGlobal">🌐 Visión Global</button>
+              <button type="button" class="preset-btn" data-focus="categories" id="btnFocusCategories">🚗 Asistencia Vial</button>
+              <button type="button" class="preset-btn" data-focus="demographics" id="btnFocusDemographics">👥 Demografía & Edad</button>
+              <button type="button" class="preset-btn" data-focus="services" id="btnFocusServices">🏆 Top Servicios</button>
             </div>
           </div>
 
-          <!-- Out of Scope Warning Alert -->
-          <div class="kpi-guard-alert" id="kpiGuardAlert" style="display: none;">
-            <div class="guard-alert-icon">⚠️</div>
-            <div class="guard-alert-text" id="kpiGuardText">--</div>
-          </div>
-
-          <!-- Main Analysis Body -->
-          <div id="kpiAnalysisContent">
-            <!-- Executive Analysis Card -->
-            <div class="kpi-analysis-card">
-              <div class="kpi-analysis-header">
-                <span class="badge badge-success">Informe Analítico de Negocio (OpenAI)</span>
+          <div class="kpi-ai-card">
+            <div class="kpi-ai-header">
+              <div class="kpi-ai-title">
+                <span class="sparkle-icon">✨</span>
+                <strong>Diagnóstico Ejecutivo & Recomendaciones de Operación</strong>
               </div>
-              <div class="kpi-analysis-text" id="kpiAnalysisText">--</div>
+              <button type="button" class="btn-copy" id="btnCopyChartAnalysis">Copiar Análisis</button>
             </div>
-
-            <!-- SQL Query Executed Box -->
-            <div class="kpi-sql-box">
-              <div class="kpi-sql-header">
-                <span>Consulta SQL Ejecutada en SQLite (dashboard.db):</span>
-                <span class="sql-badge">Text-to-SQL Grounded</span>
-              </div>
-              <pre class="kpi-sql-code" id="kpiSqlCode">--</pre>
-            </div>
-
-            <!-- Data Table Preview -->
-            <div class="kpi-table-box">
-              <div class="kpi-table-header">
-                <span>Datos Obtenidos de la Base de Datos (<span id="kpiRowCount">0</span> filas):</span>
-              </div>
-              <div class="kpi-table-wrapper" id="kpiTableWrapper">
-                <!-- Dynamically populated table -->
-              </div>
+            <div class="kpi-ai-body" id="chartAnalysisText">
+              Cargando análisis estratégico con OpenAI gpt-6-luna...
             </div>
           </div>
         </section>

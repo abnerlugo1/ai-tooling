@@ -192,3 +192,135 @@ class KPICopilot:
             "latency_ms": round(latency_ms, 2),
             "total_db_records": 2999,
         }
+
+    def get_dashboard_chart_metrics(self) -> Dict[str, Any]:
+        """Calculates exact aggregated data for all charts in the visual KPI dashboard."""
+        conn = sqlite3.connect(str(self.db_path))
+        c = conn.cursor()
+
+        # 1. Total and Age Stats
+        c.execute("SELECT COUNT(*), ROUND(AVG(edad), 1), MIN(edad), MAX(edad) FROM dashboard;")
+        total, avg_age, min_age, max_age = c.fetchone()
+
+        # 2. Categories Distribution
+        category_colors = {
+            "Asistencia vial": "#06b6d4",        # Cyan
+            "Check up": "#10b981",               # Emerald
+            "Membresia dental": "#a855f7",       # Purple
+            "Asistencia en el hogar": "#f59e0b", # Amber
+            "Plan salud": "#ec4899",             # Pink
+            "Asistencia funeraria": "#64748b",   # Slate
+            "Asesoría jurídica": "#38bdf8",      # Light Blue
+        }
+        c.execute("""
+            SELECT categoria, COUNT(*) as total, 
+                   ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM dashboard), 1) as pct,
+                   ROUND(AVG(edad), 1) as avg_age
+            FROM dashboard 
+            GROUP BY categoria 
+            ORDER BY total DESC;
+        """)
+        categories = []
+        for row in c.fetchall():
+            cat, cnt, pct, cage = row
+            categories.append({
+                "categoria": cat,
+                "total": cnt,
+                "pct": pct,
+                "avg_age": cage,
+                "color": category_colors.get(cat, "#94a3b8"),
+            })
+
+        # 3. Gender Distribution
+        c.execute("""
+            SELECT genero, COUNT(*) as total,
+                   ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM dashboard), 1) as pct,
+                   ROUND(AVG(edad), 1) as avg_age
+            FROM dashboard 
+            GROUP BY genero
+            ORDER BY total DESC;
+        """)
+        gender = []
+        for g, cnt, pct, gage in c.fetchall():
+            gender.append({
+                "genero": g,
+                "label": "Femenino" if g == "F" else "Masculino",
+                "total": cnt,
+                "pct": pct,
+                "avg_age": gage,
+                "color": "#ec4899" if g == "F" else "#06b6d4",
+            })
+
+        # 4. Top 6 Services
+        c.execute("""
+            SELECT servicio, categoria, COUNT(*) as total,
+                   ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM dashboard), 1) as pct
+            FROM dashboard 
+            GROUP BY servicio, categoria 
+            ORDER BY total DESC 
+            LIMIT 6;
+        """)
+        top_services = []
+        for srv, cat, cnt, pct in c.fetchall():
+            top_services.append({
+                "servicio": srv,
+                "categoria": cat,
+                "total": cnt,
+                "pct": pct,
+            })
+
+        # 5. Monthly Timeline
+        c.execute("""
+            SELECT substr(fecha, 1, 7) as ym, COUNT(*) as total
+            FROM dashboard 
+            GROUP BY ym 
+            ORDER BY ym;
+        """)
+        timeline = [{"month": ym, "total": cnt} for ym, cnt in c.fetchall()]
+
+        conn.close()
+
+        return {
+            "summary": {
+                "total_records": total,
+                "avg_age": avg_age,
+                "min_age": min_age,
+                "max_age": max_age,
+                "top_category": categories[0]["categoria"] if categories else "",
+                "top_category_pct": categories[0]["pct"] if categories else 0,
+            },
+            "categories": categories,
+            "gender": gender,
+            "top_services": top_services,
+            "timeline": timeline,
+        }
+
+    def analyze_charts(self, focus: str = "global") -> Dict[str, Any]:
+        """Uses OpenAI to synthesize an executive analysis based on the visual charts."""
+        metrics = self.get_dashboard_chart_metrics()
+        metrics_json = json.dumps(metrics, ensure_ascii=False)
+
+        prompt = (
+            f"Actúa como Director de Analítica y BI. A continuación tienes las métricas agregadas del dashboard de clientes (2,999 registros):\n"
+            f"{metrics_json}\n\n"
+            f"Enfoque solicitado: '{focus}'.\n"
+            "Genera un informe analítico ejecutivo conciso con:\n"
+            "1. **Hallazgo Principal de los Gráficos**: Qué patrón dominante revelan los datos (ej. concentración en Asistencia Vial con 56.8% y predominancia femenina con 59%).\n"
+            "2. **Análisis de Dispersión y Demanda**: Comparativa entre la categoría líder y los servicios de menor volumen.\n"
+            "3. **Recomendación Estratégica**: Una acción clara para optimizar recursos, retención o cobertura de servicios."
+        )
+
+        res = self.llm.generate(
+            LLMRequest(
+                prompt=prompt,
+                system_prompt="Eres un Senior BI Analyst especializado en presentación gráfica de KPIs y toma de decisiones corporativas.",
+                max_tokens=450,
+                temperature=0.2,
+            )
+        )
+
+        return {
+            "analysis": res.text,
+            "focus": focus,
+            "model": self.llm.model_name,
+        }
